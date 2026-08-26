@@ -1,0 +1,16 @@
+services:
+  tiktok-hub:
+    build: .
+    command: ["serve"]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./output:/output
+      - ./src/cookies.json:/app/cookies.json:ro
+      - ./src/telegram.json:/app/telegram.json:ro
+    environment:
+      - OUTPUT_DIR=/output
+    restart: unless-stopped
+    # The flv->mkv remux on shutdown reads/rewrites the whole recording, so
+    # give it real time to finish before Docker sends SIGKILL.
+    stop_grace_period: 60s

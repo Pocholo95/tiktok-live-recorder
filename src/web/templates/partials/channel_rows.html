@@ -1,0 +1,5 @@
+{% for channel in channels %}
+{% include "partials/channel_row.html" %}
+{% else %}
+<tr><td colspan="5" class="empty">Todavía no agregaste ningún canal.</td></tr>
+{% endfor %}

@@ -1,0 +1,5 @@
+{% for recording in recordings %}
+{% include "partials/recording_card.html" %}
+{% else %}
+<p class="empty">No hay grabaciones para este filtro.</p>
+{% endfor %}

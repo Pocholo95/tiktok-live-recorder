@@ -1,0 +1,22 @@
+<div class="recording-card">
+  <img
+    src="/media/{{ recording.id }}/thumbnail"
+    alt=""
+    loading="lazy"
+    onclick="
+      const v = this.nextElementSibling;
+      v.src = '/media/{{ recording.id }}';
+      v.hidden = false;
+      this.hidden = true;
+      v.play();
+    ">
+  <video controls hidden preload="none"></video>
+  <div class="recording-meta">
+    <strong>@{{ recording.username }}</strong>
+    <span>{{ recording.started_at }}</span>
+    <span>{{ recording.format }}</span>
+    {% if recording.duration_seconds %}<span>{{ (recording.duration_seconds // 60) }} min</span>{% endif %}
+    {% if recording.file_size_bytes %}<span>{{ (recording.file_size_bytes / 1048576) | round(1) }} MB</span>{% endif %}
+    <span class="status-badge status-{{ recording.status }}">{{ recording.status }}</span>
+  </div>
+</div>

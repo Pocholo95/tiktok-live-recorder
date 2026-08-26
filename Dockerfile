@@ -42,4 +42,7 @@ COPY --from=builder /app /app
 
 RUN chmod +x /app/entrypoint.sh
 
+# Only used by `serve` mode (the WebUI hub) - plain CLI usage ignores it.
+EXPOSE 8000
+
 ENTRYPOINT ["/app/entrypoint.sh"]

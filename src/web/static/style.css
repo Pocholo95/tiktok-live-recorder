@@ -1,0 +1,138 @@
+:root {
+  color-scheme: dark light;
+  --bg: #14161b;
+  --panel: #1d2027;
+  --border: #2c303a;
+  --text: #e4e6eb;
+  --muted: #8b91a0;
+  --accent: #4f8cff;
+  --ok: #3ecf8e;
+  --warn: #e0a63c;
+  --error: #e5484d;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.nav {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.nav a {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.nav a:hover { color: var(--accent); }
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+h1 { font-size: 1.4rem; }
+
+.add-channel-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+input, select, button {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+button {
+  cursor: pointer;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button:hover { opacity: 0.9; }
+
+table.channels-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.channels-table th, .channels-table td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  background: var(--border);
+}
+
+.status-recording { background: var(--error); color: #fff; }
+.status-converting { background: var(--warn); color: #14161b; }
+.status-idle, .status-starting { background: var(--border); }
+.status-checking { background: var(--accent); color: #fff; }
+.status-waiting { background: var(--border); color: var(--muted); }
+.status-error { background: var(--error); color: #fff; }
+.status-stopped { background: transparent; border: 1px solid var(--border); }
+.status-completed { background: var(--ok); color: #14161b; }
+.status-failed { background: var(--error); color: #fff; }
+
+.filters {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.recordings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.recording-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.recording-card img, .recording-card video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+  cursor: pointer;
+  background: #000;
+}
+
+.recording-meta {
+  padding: 0.5rem 0.7rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.empty { color: var(--muted); }

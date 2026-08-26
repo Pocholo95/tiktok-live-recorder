@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from threading import Event
 
 import pytest
 
@@ -97,3 +98,101 @@ def test_setup_keeps_manual_room_id_allowed_when_country_check_is_blocked():
         "is_country_blacklisted",
         "is_room_alive:1234567890",
     ]
+
+
+def test_automatic_mode_exits_immediately_when_stop_event_is_set():
+    stop_event = Event()
+    stop_event.set()
+
+    recorder = TikTokRecorder(
+        RecorderConfig(
+            mode=Mode.AUTOMATIC, user="creator", cookies={}, stop_event=stop_event
+        )
+    )
+    fake_api = FakeTikTokAPI(blacklisted=False)
+    recorder.tiktok = fake_api
+
+    recorder.automatic_mode()
+
+    assert fake_api.calls == []
+
+
+class _StreamingFakeTikTokAPI:
+    """Fake TikTokAPI for exercising start_recording end-to-end."""
+
+    def __init__(self, stream_chunks):
+        self._stream_chunks = stream_chunks
+        self._room_alive_calls = 0
+
+    def is_room_alive(self, room_id):
+        # Live for the first check inside start_recording's loop, offline on
+        # the recheck afterwards - mirrors how a real stream ending is
+        # detected only once the current chunk generator is exhausted.
+        self._room_alive_calls += 1
+        return self._room_alive_calls == 1
+
+    def get_live_url_candidates(self, room_id, user=None):
+        return ["https://example.invalid/live.flv"]
+
+    def download_live_stream(self, live_url):
+        yield from self._stream_chunks
+
+
+def test_start_recording_reports_status_transitions_on_success(tmp_path, monkeypatch):
+    events = []
+
+    monkeypatch.setattr(
+        "core.tiktok_recorder.VideoManagement.convert_flv_to_mkv",
+        lambda file, ffmpeg_path=None: file.replace("_flv.flv", ".mkv"),
+    )
+    monkeypatch.setattr(
+        "core.tiktok_recorder.VideoManagement.convert_mkv_to_mp4",
+        lambda file, bitrate=None, ffmpeg_path=None: file.replace(".mkv", ".mp4"),
+    )
+
+    recorder = TikTokRecorder(
+        RecorderConfig(
+            mode=Mode.MANUAL,
+            user="creator",
+            room_id="1234567890",
+            cookies={},
+            output=str(tmp_path),
+            on_status=lambda phase, **data: events.append((phase, data)),
+        )
+    )
+    recorder.tiktok = _StreamingFakeTikTokAPI(stream_chunks=[b"x" * 5000])
+
+    recorder.start_recording("creator", "1234567890")
+
+    assert [phase for phase, _ in events] == [
+        "recording_started",
+        "converting",
+        "recording_finished",
+    ]
+    assert events[-1][1]["format"] == "mp4"
+    assert events[-1][1]["file_path"].endswith(".mp4")
+
+
+def test_start_recording_reports_error_status_when_remux_fails(tmp_path, monkeypatch):
+    events = []
+
+    monkeypatch.setattr(
+        "core.tiktok_recorder.VideoManagement.convert_flv_to_mkv",
+        lambda file, ffmpeg_path=None: None,
+    )
+
+    recorder = TikTokRecorder(
+        RecorderConfig(
+            mode=Mode.MANUAL,
+            user="creator",
+            room_id="1234567890",
+            cookies={},
+            output=str(tmp_path),
+            on_status=lambda phase, **data: events.append((phase, data)),
+        )
+    )
+    recorder.tiktok = _StreamingFakeTikTokAPI(stream_chunks=[b"x" * 5000])
+
+    recorder.start_recording("creator", "1234567890")
+
+    assert [phase for phase, _ in events] == ["recording_started", "recording_error"]

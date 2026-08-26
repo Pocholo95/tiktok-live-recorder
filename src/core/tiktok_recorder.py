@@ -29,6 +29,18 @@ class TikTokRecorder:
         self.use_telegram = config.use_telegram
         self._proxy = config.proxy
         self._cookies = config.cookies
+        self._stop_event = config.stop_event
+        self._on_status = config.on_status or (lambda *args, **kwargs: None)
+
+    def _stopped(self) -> bool:
+        return self._stop_event is not None and self._stop_event.is_set()
+
+    def _wait(self, seconds: float) -> None:
+        """Sleep, but wake immediately if a supervisor requests a stop."""
+        if self._stop_event is not None:
+            self._stop_event.wait(seconds)
+        else:
+            time.sleep(seconds)
 
     def _setup(self):
         """Resolve user/room data and validate prerequisites via network calls."""
@@ -99,8 +111,9 @@ class TikTokRecorder:
         self.start_recording(self.user, self.room_id)
 
     def automatic_mode(self):
-        while True:
+        while not self._stopped():
             try:
+                self._on_status("checking", user=self.user)
                 self.room_id = self.tiktok.get_room_id_from_user(self.user)
                 self.manual_mode()
 
@@ -109,17 +122,19 @@ class TikTokRecorder:
                 logger.info(
                     f"Waiting {self.automatic_interval} minutes before recheck\n"
                 )
-                time.sleep(self.automatic_interval * TimeOut.ONE_MINUTE)
+                self._on_status("waiting", user=self.user)
+                self._wait(self.automatic_interval * TimeOut.ONE_MINUTE)
 
             except (ConnectionError, RequestException, HTTPException):
                 logger.error(Error.CONNECTION_CLOSED_AUTOMATIC)
-                time.sleep(TimeOut.CONNECTION_CLOSED * TimeOut.ONE_MINUTE)
+                self._wait(TimeOut.CONNECTION_CLOSED * TimeOut.ONE_MINUTE)
 
     def followers_mode(self):
         active_recordings = {}  # follower -> Thread
 
-        while True:
+        while not self._stopped():
             try:
+                self._on_status("checking", user=self.user)
                 followers = self.tiktok.get_followers_list(self.sec_uid)
 
                 for follower in followers:
@@ -146,7 +161,7 @@ class TikTokRecorder:
                         thread.start()
                         active_recordings[follower] = thread
 
-                        time.sleep(2.5)
+                        self._wait(2.5)
 
                     except TikTokRecorderError as e:
                         logger.error(f"Error while processing @{follower}: {e}")
@@ -163,18 +178,20 @@ class TikTokRecorder:
                 logger.info(
                     f"Waiting {self.automatic_interval} minutes for the next check..."
                 )
-                time.sleep(self.automatic_interval * TimeOut.ONE_MINUTE)
+                self._on_status("waiting", user=self.user)
+                self._wait(self.automatic_interval * TimeOut.ONE_MINUTE)
 
             except (UserLiveError, LiveNotFound) as ex:
                 logger.info(ex)
                 logger.info(
                     f"Waiting {self.automatic_interval} minutes before recheck\n"
                 )
-                time.sleep(self.automatic_interval * TimeOut.ONE_MINUTE)
+                self._on_status("waiting", user=self.user)
+                self._wait(self.automatic_interval * TimeOut.ONE_MINUTE)
 
             except (ConnectionError, RequestException, HTTPException):
                 logger.error(Error.CONNECTION_CLOSED_AUTOMATIC)
-                time.sleep(TimeOut.CONNECTION_CLOSED * TimeOut.ONE_MINUTE)
+                self._wait(TimeOut.CONNECTION_CLOSED * TimeOut.ONE_MINUTE)
 
     def _build_output_path(self, user: str) -> str:
         filename = (
@@ -193,6 +210,7 @@ class TikTokRecorder:
             raise LiveNotFound(TikTokError.RETRIEVE_LIVE_URL)
 
         output = self._build_output_path(user)
+        self._on_status("recording_started", user=user, file_path=output)
 
         min_stream_bytes = 4096
         for index, live_url in enumerate(live_urls, start=1):
@@ -218,6 +236,10 @@ class TikTokRecorder:
                             logger.info("User is no longer live. Stopping recording.")
                             break
 
+                        if self._stopped():
+                            logger.info("Stop requested. Stopping recording.")
+                            break
+
                         start_time = time.time()
                         for chunk in self.tiktok.download_live_stream(live_url):
                             buffer.extend(chunk)
@@ -239,11 +261,11 @@ class TikTokRecorder:
                     except ConnectionError:
                         if self.mode == Mode.AUTOMATIC:
                             logger.error(Error.CONNECTION_CLOSED_AUTOMATIC)
-                            time.sleep(TimeOut.CONNECTION_CLOSED * TimeOut.ONE_MINUTE)
+                            self._wait(TimeOut.CONNECTION_CLOSED * TimeOut.ONE_MINUTE)
 
                     except (RequestException, HTTPException) as ex:
                         logger.warning(f"Network hiccup, retrying: {ex}")
-                        time.sleep(2)
+                        self._wait(2)
 
                     except KeyboardInterrupt:
                         logger.info("Recording stopped by user.")
@@ -276,7 +298,23 @@ class TikTokRecorder:
         logger.info(f"Recording finished: {Path(output).resolve()}\n")
         mkv_file = VideoManagement.convert_flv_to_mkv(output, self.ffmpeg_path)
         if mkv_file:
-            VideoManagement.convert_mkv_to_mp4(mkv_file, self.bitrate, self.ffmpeg_path)
+            self._on_status("converting", user=user, file_path=mkv_file)
+            final_path = VideoManagement.convert_mkv_to_mp4(
+                mkv_file, self.bitrate, self.ffmpeg_path
+            )
+            self._on_status(
+                "recording_finished",
+                user=user,
+                file_path=final_path or mkv_file,
+                format="mp4" if final_path else "mkv",
+            )
+        else:
+            self._on_status(
+                "recording_error",
+                user=user,
+                file_path=output,
+                error="flv-to-mkv remux failed",
+            )
 
     def check_country_blacklisted(self):
         is_blacklisted = self.tiktok.is_country_blacklisted()

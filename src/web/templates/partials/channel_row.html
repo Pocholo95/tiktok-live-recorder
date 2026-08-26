@@ -1,0 +1,24 @@
+<tr id="channel-row-{{ channel.id }}">
+  <td>@{{ channel.username }}</td>
+  <td>{{ channel.mode }}</td>
+  <td>{{ channel.automatic_interval }} min</td>
+  <td>
+    <span class="status-badge status-{{ channel.phase }}">{{ channel.phase }}</span>
+    {% if channel.detail %}<br><small>{{ channel.detail }}</small>{% endif %}
+  </td>
+  <td>
+    <button
+      hx-post="/channels/{{ channel.id }}/toggle"
+      hx-target="closest tr"
+      hx-swap="outerHTML">
+      {{ "Pausar" if channel.enabled else "Activar" }}
+    </button>
+    <button
+      hx-delete="/channels/{{ channel.id }}"
+      hx-target="closest tr"
+      hx-swap="outerHTML"
+      hx-confirm="¿Eliminar el canal @{{ channel.username }}?">
+      Eliminar
+    </button>
+  </td>
+</tr>

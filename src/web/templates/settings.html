@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Settings - TikTok Live Recorder Hub{% endblock %}
+{% block content %}
+<h1>Configuración</h1>
+<p>Las credenciales se leen desde archivos montados en el contenedor - no se editan desde acá.</p>
+<ul>
+  <li>cookies.json: {{ "presente" if cookies_ok else "falta o es inválido" }}</li>
+  <li>telegram.json: {{ "presente" if telegram_ok else "falta o es inválido (opcional)" }}</li>
+</ul>
+<p>Para configurarlas, montalas como volumen al levantar el contenedor:</p>
+<pre>-v ./cookies.json:/app/cookies.json:ro
+-v ./telegram.json:/app/telegram.json:ro</pre>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Library - TikTok Live Recorder Hub{% endblock %}
+{% block content %}
+<h1>Grabaciones</h1>
+
+<form class="filters" hx-get="/partials/recordings" hx-target="#recordings-grid" hx-trigger="change" hx-swap="innerHTML">
+  <select name="channel_id">
+    <option value="">Todos los canales</option>
+    {% for channel in channels %}
+    <option value="{{ channel.id }}">@{{ channel.username }}</option>
+    {% endfor %}
+  </select>
+  <input type="date" name="date_from">
+  <input type="date" name="date_to">
+</form>
+
+<div id="recordings-grid" class="recordings-grid">
+  {% include "partials/recording_cards.html" %}
+</div>
+{% endblock %}

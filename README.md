@@ -92,15 +92,66 @@ uv run python src/main.py -h
 <details>
 <summary>Docker 🐳</summary>
 
+> This fork adds crash-safety fixes (recordings remux to `.mkv` before the
+> final `.mp4`, and `docker stop` is handled gracefully) and the WebUI hub
+> below. Build the image from this repo to get them - the published
+> `michele0303/tiktok-live-recorder:latest` image does not include them.
+
 ```bash
-sudo docker run \
+docker build -t tiktok-live-recorder .
+
+docker run \
   -v ./output:/output \
-  michele0303/tiktok-live-recorder:latest \
+  tiktok-live-recorder \
   -output /output \
   -user <username>
 ```
 
 </details>
+
+## WebUI Hub
+
+Instead of fixing the recorded channels at container startup, `serve` mode
+runs a small web dashboard to add/remove channels on the fly, see live
+status per channel, and browse/play past recordings filtered by channel or
+date.
+
+```bash
+docker compose up
+```
+
+or directly with `docker run`:
+
+```bash
+docker run -d \
+  --name tiktok-hub \
+  --restart unless-stopped \
+  --stop-timeout 60 \
+  -p 8000:8000 \
+  -v ./output:/output \
+  -v ./src/cookies.json:/app/cookies.json:ro \
+  -v ./src/telegram.json:/app/telegram.json:ro \
+  tiktok-live-recorder serve
+```
+
+Then open `http://localhost:8000`. Credentials (`cookies.json`/`telegram.json`)
+are still plain files - there's no in-browser editor, mount them as shown
+above (see [How to set cookies](docs/GUIDE.md#how-to-set-cookies)).
+
+`--stop-timeout 60` (or `stop_grace_period: 60s` in compose) matters: the
+flv→mkv remux on shutdown reads and rewrites the whole recording, so a
+long stream needs more than Docker's default 10s grace period to finish
+converting before `docker stop` escalates to `SIGKILL`.
+
+### Environment variables (`serve` mode only)
+
+| Variable | Default | Description |
+|---|---|---|
+| `OUTPUT_DIR` | `/output` | Where recordings, thumbnails, and the hub's SQLite DB (`hub.db`) are stored. |
+| `HUB_DB_PATH` | `$OUTPUT_DIR/hub.db` | Override the DB file location. |
+| `HUB_HOST` | `0.0.0.0` | Interface the web server binds to. |
+| `HUB_PORT` | `8000` | Port the web server listens on. |
+| `HUB_RECONCILE_INTERVAL` | `5` | Seconds between checks for channel add/remove/edit. |
 
 ## Command-Line Usage
 

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - TikTok Live Recorder Hub{% endblock %}
+{% block content %}
+<h1>Canales</h1>
+
+<form
+  class="add-channel-form"
+  hx-post="/channels"
+  hx-target="#channels-body"
+  hx-swap="innerHTML"
+  hx-on::after-request="if(event.detail.successful) this.reset()">
+  <input type="text" name="username" placeholder="usuario (sin @)" required>
+  <select name="mode">
+    <option value="automatic">Automatic</option>
+    <option value="followers">Followers</option>
+  </select>
+  <input type="number" name="automatic_interval" value="5" min="1" title="Minutos entre chequeos">
+  <input type="text" name="proxy" placeholder="proxy (opcional)">
+  <input type="text" name="bitrate" placeholder="bitrate (opcional, ej. 1000k)">
+  <label><input type="checkbox" name="use_telegram" value="true"> Telegram</label>
+  <button type="submit">Agregar canal</button>
+</form>
+
+<table class="channels-table">
+  <thead>
+    <tr>
+      <th>Usuario</th>
+      <th>Modo</th>
+      <th>Intervalo</th>
+      <th>Estado</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody id="channels-body" hx-get="/partials/channels" hx-trigger="load, every 3s" hx-swap="innerHTML">
+    {% include "partials/channel_rows.html" %}
+  </tbody>
+</table>
+{% endblock %}

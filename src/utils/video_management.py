@@ -37,9 +37,7 @@ class VideoManagement:
         logger.info("Remuxing {} to MKV format...".format(file))
 
         if not VideoManagement.wait_for_file_release(file):
-            logger.error(
-                f"File {file} is still locked after waiting. Skipping remux."
-            )
+            logger.error(f"File {file} is still locked after waiting. Skipping remux.")
             return None
 
         output_file = file.replace("_flv.flv", ".mkv")
@@ -90,7 +88,8 @@ class VideoManagement:
                 f"{e.stderr.decode() if hasattr(e, 'stderr') else str(e)}. "
                 f"Keeping MKV master at {Path(file).resolve()}"
             )
-            return
+            return None
 
         os.remove(file)
         logger.info(f"Finished converting {Path(output_file).resolve()}\n")
+        return output_file

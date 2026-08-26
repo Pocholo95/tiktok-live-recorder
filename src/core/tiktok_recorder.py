@@ -178,7 +178,7 @@ class TikTokRecorder:
 
     def _build_output_path(self, user: str) -> str:
         filename = (
-            f"TK_{user}_{time.strftime('%Y.%m.%d_%H-%M-%S', time.localtime())}_flv.mp4"
+            f"TK_{user}_{time.strftime('%Y.%m.%d_%H-%M-%S', time.localtime())}_flv.flv"
         )
         if self.output:
             return str(Path(self.output) / filename)
@@ -274,7 +274,9 @@ class TikTokRecorder:
             raise LiveNotFound(TikTokError.RETRIEVE_LIVE_URL)
 
         logger.info(f"Recording finished: {Path(output).resolve()}\n")
-        VideoManagement.convert_flv_to_mp4(output, self.bitrate, self.ffmpeg_path)
+        mkv_file = VideoManagement.convert_flv_to_mkv(output, self.ffmpeg_path)
+        if mkv_file:
+            VideoManagement.convert_mkv_to_mp4(mkv_file, self.bitrate, self.ffmpeg_path)
 
     def check_country_blacklisted(self):
         is_blacklisted = self.tiktok.is_country_blacklisted()

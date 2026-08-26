@@ -1,8 +1,18 @@
 import sys
 import os
+import signal
 import multiprocessing
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _raise_keyboard_interrupt(signum, frame):
+    """
+    Translate SIGTERM (e.g. `docker stop`) into the same graceful shutdown
+    path already used for Ctrl-C, so an in-progress recording gets flushed
+    and converted instead of being killed mid-write.
+    """
+    raise KeyboardInterrupt()
 
 
 def record_user(config):
@@ -35,6 +45,11 @@ def _build_config(args, mode, cookies, user=None):
 
 
 def run_recordings(args, mode, cookies):
+    # Registered before any child process is forked, so children (which
+    # inherit signal handlers on fork) also convert SIGTERM into a
+    # graceful stop instead of dying mid-recording/mid-conversion.
+    signal.signal(signal.SIGTERM, _raise_keyboard_interrupt)
+
     if isinstance(args.user, list):
         processes = []
         for user in args.user:
@@ -46,7 +61,10 @@ def run_recordings(args, mode, cookies):
             for p in processes:
                 p.join()
         except KeyboardInterrupt:
-            print("\n[!] Ctrl-C detected.")
+            print("\n[!] Stopping all recordings (Ctrl-C or SIGTERM)...")
+            for p in processes:
+                if p.is_alive():
+                    p.terminate()
             try:
                 for p in processes:
                     p.join()
@@ -54,7 +72,7 @@ def run_recordings(args, mode, cookies):
                 print("\n[!] Forcefully terminating all processes.")
                 for p in processes:
                     if p.is_alive():
-                        p.terminate()
+                        p.kill()
     else:
         config = _build_config(args, mode, cookies, user=args.user)
         record_user(config)

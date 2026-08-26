@@ -136,3 +136,48 @@ table.channels-table {
 }
 
 .empty { color: var(--muted); }
+
+.warning {
+  background: rgba(224, 166, 60, 0.15);
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  color: var(--warn);
+  font-size: 0.85rem;
+}
+
+.saved-banner {
+  background: rgba(62, 207, 142, 0.15);
+  border: 1px solid var(--ok);
+  border-radius: 6px;
+  padding: 0.5rem 0.8rem;
+  color: var(--ok);
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 360px;
+  margin-bottom: 2rem;
+}
+
+.settings-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.settings-form .hint {
+  font-size: 0.75rem;
+}
+
+.settings-form input {
+  width: 100%;
+}
+
+.settings-form button {
+  align-self: flex-start;
+}

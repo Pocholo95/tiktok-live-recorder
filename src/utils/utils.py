@@ -31,6 +31,26 @@ def read_telegram_config():
         return json.load(f)
 
 
+def write_cookies(data):
+    """
+    Overwrites the cookies config file with `data`.
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, "..", "cookies.json")
+    with open(config_path, "w") as f:
+        json.dump(data, f, indent=2)
+
+
+def write_telegram_config(data):
+    """
+    Overwrites the telegram config file with `data`.
+    """
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, "..", "telegram.json")
+    with open(config_path, "w") as f:
+        json.dump(data, f, indent=2)
+
+
 def is_termux() -> bool:
     """
     Checks if the script is running in Termux.

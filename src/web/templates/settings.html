@@ -2,12 +2,46 @@
 {% block title %}Settings - TikTok Live Recorder Hub{% endblock %}
 {% block content %}
 <h1>Configuración</h1>
-<p>Las credenciales se leen desde archivos montados en el contenedor - no se editan desde acá.</p>
-<ul>
-  <li>cookies.json: {{ "presente" if cookies_ok else "falta o es inválido" }}</li>
-  <li>telegram.json: {{ "presente" if telegram_ok else "falta o es inválido (opcional)" }}</li>
-</ul>
-<p>Para configurarlas, montalas como volumen al levantar el contenedor:</p>
-<pre>-v ./cookies.json:/app/cookies.json:ro
--v ./telegram.json:/app/telegram.json:ro</pre>
+
+{% if saved == "cookies" %}<p class="saved-banner">cookies.json actualizado.</p>{% endif %}
+{% if saved == "telegram" %}<p class="saved-banner">telegram.json actualizado.</p>{% endif %}
+
+<p class="warning">
+  Esta webui no tiene login: cualquiera con acceso de red al puerto puede ver y
+  cambiar estos valores. Restringí el acceso por firewall/red si vas a guardar
+  credenciales acá.
+</p>
+
+<h2>Cookies (TikTok)</h2>
+<form method="post" action="/settings/cookies" class="settings-form">
+  <label>
+    sessionid_ss
+    <span class="hint">{{ session_status or "no configurado" }}</span>
+    <input type="password" name="sessionid_ss" placeholder="dejar vacío para no cambiar" autocomplete="off">
+  </label>
+  <label>
+    tt-target-idc
+    <input type="text" name="tt_target_idc" value="{{ tt_target_idc }}" placeholder="ej. useast2a">
+  </label>
+  <button type="submit">Guardar cookies</button>
+</form>
+
+<h2>Telegram (opcional)</h2>
+<form method="post" action="/settings/telegram" class="settings-form">
+  <label>
+    api_id
+    <span class="hint">{{ api_id_status or "no configurado" }}</span>
+    <input type="password" name="api_id" placeholder="dejar vacío para no cambiar" autocomplete="off">
+  </label>
+  <label>
+    api_hash
+    <span class="hint">{{ api_hash_status or "no configurado" }}</span>
+    <input type="password" name="api_hash" placeholder="dejar vacío para no cambiar" autocomplete="off">
+  </label>
+  <label>
+    chat_id
+    <input type="text" name="chat_id" value="{{ chat_id }}" placeholder="ej. 123456789">
+  </label>
+  <button type="submit">Guardar Telegram</button>
+</form>
 {% endblock %}

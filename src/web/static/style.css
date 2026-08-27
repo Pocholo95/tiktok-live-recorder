@@ -92,7 +92,7 @@ table.channels-table {
 .status-converting { background: var(--warn); color: #14161b; }
 .status-idle, .status-starting { background: var(--border); }
 .status-checking { background: var(--accent); color: #fff; }
-.status-waiting { background: var(--border); color: var(--muted); }
+.status-offline { background: var(--border); color: var(--muted); }
 .status-error { background: var(--error); color: #fff; }
 .status-stopped { background: transparent; border: 1px solid var(--border); }
 .status-completed { background: var(--ok); color: #14161b; }

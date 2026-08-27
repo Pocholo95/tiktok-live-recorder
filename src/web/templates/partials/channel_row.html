@@ -3,7 +3,7 @@
   <td>{{ channel.mode }}</td>
   <td>{{ channel.automatic_interval }} min</td>
   <td>
-    <span class="status-badge status-{{ channel.phase }}">{{ channel.phase }}</span>
+    <span class="status-badge status-{{ channel.phase }}">{{ channel.phase_label }}</span>
     {% if channel.detail %}<br><small>{{ channel.detail }}</small>{% endif %}
   </td>
   <td>

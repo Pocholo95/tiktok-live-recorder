@@ -122,7 +122,7 @@ class TikTokRecorder:
                 logger.info(
                     f"Waiting {self.automatic_interval} minutes before recheck\n"
                 )
-                self._on_status("waiting", user=self.user)
+                self._on_status("offline", user=self.user)
                 self._wait(self.automatic_interval * TimeOut.ONE_MINUTE)
 
             except (ConnectionError, RequestException, HTTPException):
@@ -178,7 +178,7 @@ class TikTokRecorder:
                 logger.info(
                     f"Waiting {self.automatic_interval} minutes for the next check..."
                 )
-                self._on_status("waiting", user=self.user)
+                self._on_status("offline", user=self.user)
                 self._wait(self.automatic_interval * TimeOut.ONE_MINUTE)
 
             except (UserLiveError, LiveNotFound) as ex:
@@ -186,7 +186,7 @@ class TikTokRecorder:
                 logger.info(
                     f"Waiting {self.automatic_interval} minutes before recheck\n"
                 )
-                self._on_status("waiting", user=self.user)
+                self._on_status("offline", user=self.user)
                 self._wait(self.automatic_interval * TimeOut.ONE_MINUTE)
 
             except (ConnectionError, RequestException, HTTPException):

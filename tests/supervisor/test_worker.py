@@ -25,7 +25,7 @@ class _FakeRecorder:
             file_path="/output/TK_creator_flv.flv",
         )
         on_status(
-            "converting", user=self.config.user, file_path="/output/TK_creator.mkv"
+            "converting", user=self.config.user, file_path="/output/TK_creator.mp4"
         )
         on_status(
             "recording_finished",

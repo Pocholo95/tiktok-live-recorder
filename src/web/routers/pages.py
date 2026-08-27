@@ -9,10 +9,22 @@ from web.deps import get_db, get_supervisor, get_templates
 
 router = APIRouter()
 
+_PHASE_LABELS = {
+    "starting": "Iniciando",
+    "checking": "Verificando",
+    "offline": "Offline",
+    "recording": "Grabando",
+    "converting": "Procesando",
+    "idle": "En espera",
+    "error": "Error",
+    "stopped": "Pausado",
+}
+
 
 def _channel_view(row, supervisor):
     status = supervisor.get_status(row["id"]) or {}
     default_phase = "stopped" if not row["enabled"] else "starting"
+    phase = status.get("phase", default_phase)
     return {
         "id": row["id"],
         "username": row["username"],
@@ -21,7 +33,8 @@ def _channel_view(row, supervisor):
         "proxy": row["proxy"],
         "bitrate": row["bitrate"],
         "enabled": bool(row["enabled"]),
-        "phase": status.get("phase", default_phase),
+        "phase": phase,
+        "phase_label": _PHASE_LABELS.get(phase, phase),
         "detail": status.get("detail"),
     }
 

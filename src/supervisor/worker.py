@@ -83,8 +83,8 @@ class Worker:
         if phase == "checking":
             self._status_store.set(self.channel_id, phase="checking")
 
-        elif phase == "waiting":
-            self._status_store.set(self.channel_id, phase="waiting")
+        elif phase == "offline":
+            self._status_store.set(self.channel_id, phase="offline")
 
         elif phase == "recording_started":
             self._recording_started_at = time.time()

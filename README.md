@@ -92,9 +92,11 @@ uv run python src/main.py -h
 <details>
 <summary>Docker 🐳</summary>
 
-> This fork adds crash-safety fixes (recordings remux to `.mkv` before the
-> final `.mp4`, and `docker stop` is handled gracefully) and the WebUI hub
-> below. Build the image from this repo to get them - the published
+> This fork adds fixes for corrupted recordings (the final `.mp4` is a real
+> re-encode instead of a remux, since TikTok's live connection reconnects
+> mid-recording and a plain `-c copy` remux can't survive that; `docker
+> stop` is also handled gracefully) and the WebUI hub below. Build the
+> image from this repo to get them - the published
 > `michele0303/tiktok-live-recorder:latest` image does not include them.
 
 ```bash
@@ -127,6 +129,7 @@ docker run -d \
   --name tiktok-hub \
   --restart unless-stopped \
   --stop-timeout 60 \
+  --cpus="1.5" \
   -p 8000:8000 \
   -v ./output:/output \
   -v ./src/cookies.json:/app/cookies.json:ro \
@@ -139,9 +142,16 @@ are still plain files - there's no in-browser editor, mount them as shown
 above (see [How to set cookies](docs/GUIDE.md#how-to-set-cookies)).
 
 `--stop-timeout 60` (or `stop_grace_period: 60s` in compose) matters: the
-flv→mkv remux on shutdown reads and rewrites the whole recording, so a
-long stream needs more than Docker's default 10s grace period to finish
-converting before `docker stop` escalates to `SIGKILL`.
+flv→mp4 conversion on shutdown reads the whole recording, so a long stream
+needs more than Docker's default 10s grace period to finish before
+`docker stop` escalates to `SIGKILL`.
+
+`--cpus="1.5"` (or `cpus: "${HUB_CPUS:-1.5}"` in compose, overridable with
+`HUB_CPUS=3 docker compose up` or a `.env` file) caps how much CPU the
+container can use. Recording conversion is a real transcode (not a cheap
+remux), so it will happily use every core it's given; if the box is on
+24/7 and you'd rather it take longer than run hot/loud, lower this instead
+of leaving it uncapped.
 
 ### Environment variables (`serve` mode only)
 
@@ -152,6 +162,7 @@ converting before `docker stop` escalates to `SIGKILL`.
 | `HUB_HOST` | `0.0.0.0` | Interface the web server binds to. |
 | `HUB_PORT` | `8000` | Port the web server listens on. |
 | `HUB_RECONCILE_INTERVAL` | `5` | Seconds between checks for channel add/remove/edit. |
+| `HUB_CPUS` | `1.5` | compose-only: CPU limit passed to `cpus:` (see above). |
 
 ## Command-Line Usage
 

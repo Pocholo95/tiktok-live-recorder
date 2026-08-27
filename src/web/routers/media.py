@@ -32,6 +32,21 @@ def get_media(recording_id: int, db=Depends(get_db)):
     return FileResponse(path, media_type=media_type)
 
 
+@router.get("/media/{recording_id}/download")
+def download_media(recording_id: int, db=Depends(get_db)):
+    """Same file as /media/{id}, but forces a "Save As" download with a
+    real filename instead of playing inline."""
+    recording = recordings_repo.get(db, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    path = Path(recording["file_path"])
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Recording file not found on disk")
+
+    return FileResponse(path, filename=path.name)
+
+
 @router.get("/media/{recording_id}/thumbnail")
 def get_thumbnail(recording_id: int, db=Depends(get_db)):
     recording = recordings_repo.get(db, recording_id)

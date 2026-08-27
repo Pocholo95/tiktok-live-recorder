@@ -78,3 +78,8 @@ def get(conn, recording_id):
     return conn.execute(
         "SELECT * FROM recordings WHERE id = ?", (recording_id,)
     ).fetchone()
+
+
+def delete(conn, recording_id):
+    conn.execute("DELETE FROM recordings WHERE id = ?", (recording_id,))
+    conn.commit()

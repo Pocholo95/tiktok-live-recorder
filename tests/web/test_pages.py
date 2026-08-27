@@ -67,6 +67,40 @@ def test_recordings_partial_filters_by_channel(client, app):
     assert "No hay grabaciones" in response.text
 
 
+def test_delete_recording_removes_row_and_files(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+
+    video_path = Path(app.state.output_dir) / "a.mp4"
+    video_path.write_bytes(b"fake video")
+    thumb_path = Path(app.state.output_dir) / "a.jpg"
+    thumb_path.write_bytes(b"fake thumb")
+
+    recording_id = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path=str(video_path)
+    )
+    recordings_repo.mark_completed(
+        conn,
+        recording_id,
+        file_path=str(video_path),
+        format="mp4",
+        thumbnail_path=str(thumb_path),
+    )
+
+    response = client.delete(f"/recordings/{recording_id}")
+
+    assert response.status_code == 200
+    assert response.text == ""
+    assert recordings_repo.get(conn, recording_id) is None
+    assert not video_path.exists()
+    assert not thumb_path.exists()
+
+
+def test_delete_recording_is_a_noop_for_unknown_id(client):
+    response = client.delete("/recordings/999")
+    assert response.status_code == 200
+
+
 def test_settings_page_loads(client):
     response = client.get("/settings")
     assert response.status_code == 200

@@ -135,6 +135,29 @@ table.channels-table {
   color: var(--muted);
 }
 
+.recording-actions {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0 0.7rem 0.7rem;
+}
+
+.recording-actions a {
+  color: var(--accent);
+  font-size: 0.8rem;
+  align-self: center;
+  text-decoration: none;
+}
+
+.recording-actions a:hover { text-decoration: underline; }
+
+.recording-actions button {
+  font-size: 0.8rem;
+  padding: 0.2rem 0.5rem;
+  background: transparent;
+  border-color: var(--error);
+  color: var(--error);
+}
+
 .empty { color: var(--muted); }
 
 .warning {

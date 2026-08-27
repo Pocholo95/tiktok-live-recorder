@@ -103,3 +103,16 @@ def test_recording_mark_failed_keeps_channel_optional(tmp_path):
     recording = recordings_repo.get(conn, recording_id)
     assert recording["status"] == "failed"
     assert recording["error_message"] == "boom"
+
+
+def test_recording_delete_removes_row(tmp_path):
+    db_path = str(tmp_path / "hub.db")
+    init_db(db_path)
+    conn = get_connection(db_path)
+
+    recording_id = recordings_repo.start(
+        conn, channel_id=None, username="creator", file_path="/output/a.mp4"
+    )
+    recordings_repo.delete(conn, recording_id)
+
+    assert recordings_repo.get(conn, recording_id) is None

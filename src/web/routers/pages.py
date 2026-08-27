@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
@@ -136,6 +138,19 @@ def recordings_partial(
     return templates.TemplateResponse(
         request, "partials/recording_cards.html", {"recordings": recordings}
     )
+
+
+@router.delete("/recordings/{recording_id}")
+def delete_recording(recording_id: int, db=Depends(get_db)):
+    recording = recordings_repo.get(db, recording_id)
+    if recording is not None:
+        if recording["file_path"]:
+            Path(recording["file_path"]).unlink(missing_ok=True)
+        if recording["thumbnail_path"]:
+            Path(recording["thumbnail_path"]).unlink(missing_ok=True)
+        recordings_repo.delete(db, recording_id)
+
+    return PlainTextResponse("")
 
 
 def _mask(value):

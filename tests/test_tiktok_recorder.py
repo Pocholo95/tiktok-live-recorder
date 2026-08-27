@@ -142,12 +142,8 @@ def test_start_recording_reports_status_transitions_on_success(tmp_path, monkeyp
     events = []
 
     monkeypatch.setattr(
-        "core.tiktok_recorder.VideoManagement.convert_flv_to_mkv",
-        lambda file, ffmpeg_path=None: file.replace("_flv.flv", ".mkv"),
-    )
-    monkeypatch.setattr(
-        "core.tiktok_recorder.VideoManagement.convert_mkv_to_mp4",
-        lambda file, bitrate=None, ffmpeg_path=None: file.replace(".mkv", ".mp4"),
+        "core.tiktok_recorder.VideoManagement.convert_flv_to_mp4",
+        lambda file, bitrate=None, ffmpeg_path=None: file.replace("_flv.flv", ".mp4"),
     )
 
     recorder = TikTokRecorder(
@@ -173,12 +169,14 @@ def test_start_recording_reports_status_transitions_on_success(tmp_path, monkeyp
     assert events[-1][1]["file_path"].endswith(".mp4")
 
 
-def test_start_recording_reports_error_status_when_remux_fails(tmp_path, monkeypatch):
+def test_start_recording_reports_error_status_when_conversion_fails(
+    tmp_path, monkeypatch
+):
     events = []
 
     monkeypatch.setattr(
-        "core.tiktok_recorder.VideoManagement.convert_flv_to_mkv",
-        lambda file, ffmpeg_path=None: None,
+        "core.tiktok_recorder.VideoManagement.convert_flv_to_mp4",
+        lambda file, bitrate=None, ffmpeg_path=None: None,
     )
 
     recorder = TikTokRecorder(
@@ -195,4 +193,8 @@ def test_start_recording_reports_error_status_when_remux_fails(tmp_path, monkeyp
 
     recorder.start_recording("creator", "1234567890")
 
-    assert [phase for phase, _ in events] == ["recording_started", "recording_error"]
+    assert [phase for phase, _ in events] == [
+        "recording_started",
+        "converting",
+        "recording_error",
+    ]

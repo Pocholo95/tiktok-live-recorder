@@ -6,8 +6,10 @@ services:
       - "8000:8000"
     volumes:
       - ./output:/output
-      - ./src/cookies.json:/app/cookies.json:ro
-      - ./src/telegram.json:/app/telegram.json:ro
+      # Not :ro - the /settings page writes to these when you save
+      # credentials from the browser.
+      - ./src/cookies.json:/app/cookies.json
+      - ./src/telegram.json:/app/telegram.json
     environment:
       - OUTPUT_DIR=/output
     # Caps how much CPU the container can use at once (recording conversion

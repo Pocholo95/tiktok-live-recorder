@@ -132,14 +132,15 @@ docker run -d \
   --cpus="1.5" \
   -p 8000:8000 \
   -v ./output:/output \
-  -v ./src/cookies.json:/app/cookies.json:ro \
-  -v ./src/telegram.json:/app/telegram.json:ro \
+  -v ./src/cookies.json:/app/cookies.json \
+  -v ./src/telegram.json:/app/telegram.json \
   tiktok-live-recorder serve
 ```
 
-Then open `http://localhost:8000`. Credentials (`cookies.json`/`telegram.json`)
-are still plain files - there's no in-browser editor, mount them as shown
-above (see [How to set cookies](docs/GUIDE.md#how-to-set-cookies)).
+Then open `http://localhost:8000`. Mount `cookies.json`/`telegram.json` as
+shown above (not `:ro` - the `/settings` page writes to them when you save
+credentials from the browser) so edits survive a container restart (see
+[How to set cookies](docs/GUIDE.md#how-to-set-cookies)).
 
 `--stop-timeout 60` (or `stop_grace_period: 60s` in compose) matters: the
 flv→mp4 conversion on shutdown reads the whole recording, so a long stream

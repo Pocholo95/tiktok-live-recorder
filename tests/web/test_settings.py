@@ -58,6 +58,43 @@ def test_update_cookies_blank_fields_do_not_overwrite(client, monkeypatch):
     assert "tt-target-idc" not in written
 
 
+def test_update_cookies_shows_friendly_error_instead_of_500(client, monkeypatch):
+    monkeypatch.setattr(utils_module, "read_cookies", lambda: {})
+
+    def _raise_readonly(data):
+        raise OSError("Read-only file system")
+
+    monkeypatch.setattr(utils_module, "write_cookies", _raise_readonly)
+
+    response = client.post(
+        "/settings/cookies",
+        data={"sessionid_ss": "new_value", "tt_target_idc": ""},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert "No se pudo guardar cookies.json" in response.text
+    assert "solo lectura" in response.text
+
+
+def test_update_telegram_shows_friendly_error_instead_of_500(client, monkeypatch):
+    monkeypatch.setattr(utils_module, "read_telegram_config", lambda: {})
+
+    def _raise_readonly(data):
+        raise OSError("Read-only file system")
+
+    monkeypatch.setattr(utils_module, "write_telegram_config", _raise_readonly)
+
+    response = client.post(
+        "/settings/telegram",
+        data={"api_id": "123", "api_hash": "", "chat_id": ""},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 200
+    assert "No se pudo guardar telegram.json" in response.text
+
+
 def test_update_telegram_merges_fields(client, monkeypatch):
     monkeypatch.setattr(utils_module, "read_telegram_config", lambda: {})
 

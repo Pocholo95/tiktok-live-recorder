@@ -5,6 +5,7 @@
 
 {% if saved == "cookies" %}<p class="saved-banner">cookies.json actualizado.</p>{% endif %}
 {% if saved == "telegram" %}<p class="saved-banner">telegram.json actualizado.</p>{% endif %}
+{% if error %}<p class="error-banner">{{ error }}</p>{% endif %}
 
 <p class="warning">
   Esta webui no tiene login: cualquiera con acceso de red al puerto puede ver y

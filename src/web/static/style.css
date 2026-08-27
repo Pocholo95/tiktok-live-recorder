@@ -177,6 +177,14 @@ table.channels-table {
   color: var(--ok);
 }
 
+.error-banner {
+  background: rgba(229, 72, 77, 0.15);
+  border: 1px solid var(--error);
+  border-radius: 6px;
+  padding: 0.5rem 0.8rem;
+  color: var(--error);
+}
+
 .settings-form {
   display: flex;
   flex-direction: column;

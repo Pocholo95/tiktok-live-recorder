@@ -206,8 +206,19 @@ def settings_page(
     )
 
 
-@router.post("/settings/cookies")
-def update_cookies(sessionid_ss: str = Form(""), tt_target_idc: str = Form("")):
+def _settings_error(request, templates, message):
+    return templates.TemplateResponse(
+        request, "settings.html", {**_settings_context(), "error": message}
+    )
+
+
+@router.post("/settings/cookies", response_class=HTMLResponse)
+def update_cookies(
+    request: Request,
+    sessionid_ss: str = Form(""),
+    tt_target_idc: str = Form(""),
+    templates=Depends(get_templates),
+):
     from utils.utils import read_cookies, write_cookies
 
     try:
@@ -220,13 +231,26 @@ def update_cookies(sessionid_ss: str = Form(""), tt_target_idc: str = Form("")):
     if tt_target_idc.strip():
         current["tt-target-idc"] = tt_target_idc.strip()
 
-    write_cookies(current)
+    try:
+        write_cookies(current)
+    except OSError as e:
+        return _settings_error(
+            request,
+            templates,
+            f"No se pudo guardar cookies.json: {e}. "
+            "¿Está montado como volumen de solo lectura (:ro)?",
+        )
+
     return RedirectResponse(url="/settings?saved=cookies", status_code=303)
 
 
-@router.post("/settings/telegram")
+@router.post("/settings/telegram", response_class=HTMLResponse)
 def update_telegram(
-    api_id: str = Form(""), api_hash: str = Form(""), chat_id: str = Form("")
+    request: Request,
+    api_id: str = Form(""),
+    api_hash: str = Form(""),
+    chat_id: str = Form(""),
+    templates=Depends(get_templates),
 ):
     from utils.utils import read_telegram_config, write_telegram_config
 
@@ -245,5 +269,14 @@ def update_telegram(
             int(stripped) if stripped.lstrip("-").isdigit() else stripped
         )
 
-    write_telegram_config(current)
+    try:
+        write_telegram_config(current)
+    except OSError as e:
+        return _settings_error(
+            request,
+            templates,
+            f"No se pudo guardar telegram.json: {e}. "
+            "¿Está montado como volumen de solo lectura (:ro)?",
+        )
+
     return RedirectResponse(url="/settings?saved=telegram", status_code=303)

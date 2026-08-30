@@ -5,7 +5,10 @@
 <script src="/static/nouislider.min.js"></script>
 
 <p><a href="/library">&larr; Volver a la biblioteca</a></p>
-<h1>Recortar @{{ recording.username }}</h1>
+<div class="editor-header">
+  <h1>Recortar @{{ recording.username }}</h1>
+  <button type="button" id="delete-recording-btn" class="button-danger">Eliminar grabación</button>
+</div>
 
 <video id="clip-video" controls preload="metadata" class="clip-video">
   <source src="/media/{{ recording.id }}">
@@ -101,6 +104,17 @@
   document.getElementById("save-mark-form").addEventListener("submit", () => {
     document.getElementById("save-start").value = startInput.value;
     document.getElementById("save-end").value = endInput.value;
+  });
+
+  document.getElementById("delete-recording-btn").addEventListener("click", () => {
+    if (!confirm("¿Eliminar esta grabación de @{{ recording.username }}? No se puede deshacer.")) {
+      return;
+    }
+    fetch(`/recordings/${recordingId}`, { method: "DELETE" }).then((response) => {
+      if (response.ok) {
+        window.location = "/library";
+      }
+    });
   });
 })();
 </script>

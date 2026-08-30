@@ -162,6 +162,12 @@ table.channels-table {
   color: var(--error);
 }
 
+.button-danger {
+  background: transparent;
+  border-color: var(--error);
+  color: var(--error);
+}
+
 .empty { color: var(--muted); }
 
 .warning {
@@ -220,6 +226,17 @@ table.channels-table {
 .hint {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.editor-header h1 {
+  margin: 0;
 }
 
 .clip-video {

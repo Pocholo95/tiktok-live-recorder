@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from web.formatting import format_hms
 from web.routers import media, pages
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
@@ -31,6 +32,7 @@ def create_app(db_path, supervisor, output_dir):
     app.state.supervisor = supervisor
     app.state.output_dir = str(output_dir)
     app.state.templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+    app.state.templates.env.filters["hhmmss"] = format_hms
 
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 

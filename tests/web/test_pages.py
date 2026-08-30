@@ -136,11 +136,13 @@ def test_create_and_delete_clip_mark(client, app):
 
     response = client.post(
         f"/recordings/{recording_id}/clip-marks",
-        data={"start": "1.5", "end": "10.0", "label": "highlight"},
+        data={"start": "2.0", "end": "10.0", "label": "highlight"},
     )
 
     assert response.status_code == 200
     assert "highlight" in response.text
+    assert "00:00:02" in response.text  # start rendered as HH:MM:SS, not raw seconds
+    assert "00:00:10" in response.text
 
     marks = clip_marks_repo.list_for_recording(conn, recording_id)
     assert len(marks) == 1

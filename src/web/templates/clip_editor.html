@@ -17,8 +17,8 @@
 <div id="range-slider" class="range-slider"></div>
 
 <div class="clip-controls">
-  <label>Inicio (s) <input type="number" id="clip-start" step="0.1" min="0"></label>
-  <label>Fin (s) <input type="number" id="clip-end" step="0.1" min="0"></label>
+  <label>Inicio <input type="text" id="clip-start" placeholder="00:00:00"></label>
+  <label>Fin <input type="text" id="clip-end" placeholder="00:00:00"></label>
   <button id="preview-btn" type="button">Previsualizar</button>
   <button id="download-btn" type="button">Descargar clip</button>
 </div>
@@ -51,6 +51,22 @@
   const recordingId = {{ recording.id }};
   let slider = null;
 
+  function formatHMS(totalSeconds) {
+    totalSeconds = Math.max(0, totalSeconds || 0);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  }
+
+  function parseHMS(text) {
+    const parts = String(text).split(":").map((p) => parseFloat(p));
+    while (parts.length < 3) parts.unshift(0);
+    const [hours, minutes, seconds] = parts.map((p) => (Number.isFinite(p) ? p : 0));
+    return hours * 3600 + minutes * 60 + seconds;
+  }
+
   function initSlider(duration) {
     const defaultEnd = Math.min(10, duration);
     noUiSlider.create(sliderEl, {
@@ -61,8 +77,8 @@
     });
     slider = sliderEl.noUiSlider;
     slider.on("update", (values) => {
-      startInput.value = parseFloat(values[0]).toFixed(1);
-      endInput.value = parseFloat(values[1]).toFixed(1);
+      startInput.value = formatHMS(parseFloat(values[0]));
+      endInput.value = formatHMS(parseFloat(values[1]));
     });
   }
 
@@ -72,7 +88,7 @@
 
   function syncSliderFromInputs() {
     if (slider) {
-      slider.set([parseFloat(startInput.value) || 0, parseFloat(endInput.value) || 0]);
+      slider.set([parseHMS(startInput.value), parseHMS(endInput.value)]);
     }
   }
   startInput.addEventListener("change", syncSliderFromInputs);
@@ -90,20 +106,23 @@
     video.addEventListener("timeupdate", onTimeUpdate);
   }
   // Exposed globally so the saved-marks list (re-rendered by htmx, outside
-  // this closure) can call it from its own "Previsualizar" buttons.
+  // this closure) can call it from its own "Previsualizar" buttons, in
+  // raw seconds (not HH:MM:SS).
   window.previewRange = previewRange;
 
   document.getElementById("preview-btn").addEventListener("click", () => {
-    previewRange(parseFloat(startInput.value) || 0, parseFloat(endInput.value) || 0);
+    previewRange(parseHMS(startInput.value), parseHMS(endInput.value));
   });
 
   document.getElementById("download-btn").addEventListener("click", () => {
-    window.location = `/media/${recordingId}/clip?start=${startInput.value}&end=${endInput.value}`;
+    const start = parseHMS(startInput.value);
+    const end = parseHMS(endInput.value);
+    window.location = `/media/${recordingId}/clip?start=${start}&end=${end}`;
   });
 
   document.getElementById("save-mark-form").addEventListener("submit", () => {
-    document.getElementById("save-start").value = startInput.value;
-    document.getElementById("save-end").value = endInput.value;
+    document.getElementById("save-start").value = parseHMS(startInput.value);
+    document.getElementById("save-end").value = parseHMS(endInput.value);
   });
 
   document.getElementById("delete-recording-btn").addEventListener("click", () => {

@@ -1,7 +1,7 @@
 {% for mark in marks %}
 <div class="clip-mark-row" id="clip-mark-{{ mark.id }}">
   <span>{{ mark.label or "Sin nombre" }}</span>
-  <span>{{ mark.start_seconds }}s - {{ mark.end_seconds }}s</span>
+  <span>{{ mark.start_seconds | hhmmss }} - {{ mark.end_seconds | hhmmss }}</span>
   <button type="button" onclick="previewRange({{ mark.start_seconds }}, {{ mark.end_seconds }})">
     Previsualizar
   </button>

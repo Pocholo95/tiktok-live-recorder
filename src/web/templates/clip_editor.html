@@ -75,9 +75,7 @@
   startInput.addEventListener("change", syncSliderFromInputs);
   endInput.addEventListener("change", syncSliderFromInputs);
 
-  document.getElementById("preview-btn").addEventListener("click", () => {
-    const start = parseFloat(startInput.value) || 0;
-    const end = parseFloat(endInput.value) || 0;
+  function previewRange(start, end) {
     video.currentTime = start;
     video.play();
     const onTimeUpdate = () => {
@@ -87,6 +85,13 @@
       }
     };
     video.addEventListener("timeupdate", onTimeUpdate);
+  }
+  // Exposed globally so the saved-marks list (re-rendered by htmx, outside
+  // this closure) can call it from its own "Previsualizar" buttons.
+  window.previewRange = previewRange;
+
+  document.getElementById("preview-btn").addEventListener("click", () => {
+    previewRange(parseFloat(startInput.value) || 0, parseFloat(endInput.value) || 0);
   });
 
   document.getElementById("download-btn").addEventListener("click", () => {

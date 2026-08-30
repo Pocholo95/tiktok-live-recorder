@@ -1,17 +1,7 @@
 <div class="recording-card" id="recording-card-{{ recording.id }}">
-  <img
-    src="/media/{{ recording.id }}/thumbnail"
-    alt=""
-    loading="lazy"
-    onclick="
-      const v = this.nextElementSibling;
-      this.hidden = true;
-      v.hidden = false;
-      v.addEventListener('loadedmetadata', () => v.play(), {once: true});
-      v.src = '/media/{{ recording.id }}';
-      v.load();
-    ">
-  <video controls hidden preload="none"></video>
+  <a href="/recordings/{{ recording.id }}/clip" class="recording-thumb-link">
+    <img src="/media/{{ recording.id }}/thumbnail" alt="" loading="lazy">
+  </a>
   <div class="recording-meta">
     <strong>@{{ recording.username }}</strong>
     <span>{{ recording.started_at }}</span>
@@ -22,7 +12,6 @@
   </div>
   <div class="recording-actions">
     <a href="/media/{{ recording.id }}/download">Descargar</a>
-    <a href="/recordings/{{ recording.id }}/clip">Recortar</a>
     <button
       hx-delete="/recordings/{{ recording.id }}"
       hx-target="closest .recording-card"

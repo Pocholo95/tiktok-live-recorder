@@ -2,6 +2,9 @@
 <div class="clip-mark-row" id="clip-mark-{{ mark.id }}">
   <span>{{ mark.label or "Sin nombre" }}</span>
   <span>{{ mark.start_seconds }}s - {{ mark.end_seconds }}s</span>
+  <button type="button" onclick="previewRange({{ mark.start_seconds }}, {{ mark.end_seconds }})">
+    Previsualizar
+  </button>
   <a href="/media/{{ recording_id }}/clip?start={{ mark.start_seconds }}&end={{ mark.end_seconds }}">Descargar</a>
   <button
     hx-delete="/clip-marks/{{ mark.id }}"

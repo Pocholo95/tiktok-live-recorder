@@ -1,0 +1,15 @@
+{% for mark in marks %}
+<div class="clip-mark-row" id="clip-mark-{{ mark.id }}">
+  <span>{{ mark.label or "Sin nombre" }}</span>
+  <span>{{ mark.start_seconds }}s - {{ mark.end_seconds }}s</span>
+  <a href="/media/{{ recording_id }}/clip?start={{ mark.start_seconds }}&end={{ mark.end_seconds }}">Descargar</a>
+  <button
+    hx-delete="/clip-marks/{{ mark.id }}"
+    hx-target="closest .clip-mark-row"
+    hx-swap="outerHTML">
+    Eliminar
+  </button>
+</div>
+{% else %}
+<p class="empty">Todavía no guardaste ninguna marca.</p>
+{% endfor %}

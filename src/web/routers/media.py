@@ -1,7 +1,9 @@
+import os
+import subprocess
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from db import recordings_repo
 from web.deps import get_db
@@ -47,6 +49,64 @@ def download_media(recording_id: int, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="Recording file not found on disk")
 
     return FileResponse(path, filename=path.name)
+
+
+@router.get("/media/{recording_id}/clip")
+def download_clip(recording_id: int, start: float, end: float, db=Depends(get_db)):
+    """
+    Cuts [start, end] out of the recording and streams the result straight
+    to the client as ffmpeg produces it - never written to disk. Stream
+    copy (no re-encode) keeps this fast; `frag_keyframe+empty_moov` is what
+    lets ffmpeg write a valid mp4 to a pipe at all (a plain mp4 needs to
+    seek back and finish the moov atom at the end, which a pipe can't do).
+    """
+    if start < 0 or end <= start:
+        raise HTTPException(status_code=400, detail="Invalid start/end range")
+
+    recording = recordings_repo.get(db, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    path = Path(recording["file_path"])
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Recording file not found on disk")
+
+    ffmpeg_path = os.environ.get("FFMPEG_PATH", "ffmpeg")
+    cmd = [
+        ffmpeg_path,
+        "-ss",
+        str(start),
+        "-to",
+        str(end),
+        "-i",
+        str(path),
+        "-c",
+        "copy",
+        "-movflags",
+        "frag_keyframe+empty_moov",
+        "-f",
+        "mp4",
+        "pipe:1",
+    ]
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+    def stream():
+        try:
+            while True:
+                chunk = process.stdout.read(65536)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            process.stdout.close()
+            process.wait()
+
+    filename = f"{path.stem}_clip_{int(start)}-{int(end)}.mp4"
+    return StreamingResponse(
+        stream(),
+        media_type="video/mp4",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/media/{recording_id}/thumbnail")

@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
-from db import channels_repo, recordings_repo
+from db import channels_repo, clip_marks_repo, recordings_repo
 from utils.enums import Mode
 from web.deps import get_db, get_supervisor, get_templates
 
@@ -163,6 +163,56 @@ def delete_recording(recording_id: int, db=Depends(get_db)):
             Path(recording["thumbnail_path"]).unlink(missing_ok=True)
         recordings_repo.delete(db, recording_id)
 
+    return PlainTextResponse("")
+
+
+@router.get("/recordings/{recording_id}/clip", response_class=HTMLResponse)
+def clip_editor(
+    request: Request,
+    recording_id: int,
+    db=Depends(get_db),
+    templates=Depends(get_templates),
+):
+    recording = recordings_repo.get(db, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    marks = clip_marks_repo.list_for_recording(db, recording_id)
+    return templates.TemplateResponse(
+        request, "clip_editor.html", {"recording": recording, "marks": marks}
+    )
+
+
+@router.post("/recordings/{recording_id}/clip-marks", response_class=HTMLResponse)
+def create_clip_mark(
+    request: Request,
+    recording_id: int,
+    start: float = Form(...),
+    end: float = Form(...),
+    label: str = Form(""),
+    db=Depends(get_db),
+    templates=Depends(get_templates),
+):
+    if end > start >= 0:
+        clip_marks_repo.insert(
+            db,
+            recording_id=recording_id,
+            start_seconds=start,
+            end_seconds=end,
+            label=label.strip() or None,
+        )
+
+    marks = clip_marks_repo.list_for_recording(db, recording_id)
+    return templates.TemplateResponse(
+        request,
+        "partials/clip_marks.html",
+        {"recording_id": recording_id, "marks": marks},
+    )
+
+
+@router.delete("/clip-marks/{mark_id}")
+def delete_clip_mark(mark_id: int, db=Depends(get_db)):
+    clip_marks_repo.delete(db, mark_id)
     return PlainTextResponse("")
 
 

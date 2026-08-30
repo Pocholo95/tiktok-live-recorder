@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Recortar - TikTok Live Recorder Hub{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/nouislider.min.css">
+<script src="/static/nouislider.min.js"></script>
+
+<p><a href="/library">&larr; Volver a la biblioteca</a></p>
+<h1>Recortar @{{ recording.username }}</h1>
+
+<video id="clip-video" controls preload="metadata" class="clip-video">
+  <source src="/media/{{ recording.id }}">
+</video>
+
+<div id="range-slider" class="range-slider"></div>
+
+<div class="clip-controls">
+  <label>Inicio (s) <input type="number" id="clip-start" step="0.1" min="0"></label>
+  <label>Fin (s) <input type="number" id="clip-end" step="0.1" min="0"></label>
+  <button id="preview-btn" type="button">Previsualizar</button>
+  <button id="download-btn" type="button">Descargar clip</button>
+</div>
+
+<p class="hint">El clip se genera al vuelo y se descarga directo - no queda guardado en el servidor, solo el rango de tiempo si lo guardás abajo.</p>
+
+<form
+  id="save-mark-form"
+  hx-post="/recordings/{{ recording.id }}/clip-marks"
+  hx-target="#clip-marks-list"
+  hx-swap="innerHTML"
+  class="settings-form">
+  <input type="hidden" name="start" id="save-start">
+  <input type="hidden" name="end" id="save-end">
+  <label>Nombre (opcional) <input type="text" name="label" placeholder="ej. gol, momento gracioso"></label>
+  <button type="submit">Guardar marca</button>
+</form>
+
+<h2>Marcas guardadas</h2>
+<div id="clip-marks-list">
+  {% include "partials/clip_marks.html" %}
+</div>
+
+<script>
+(function () {
+  const video = document.getElementById("clip-video");
+  const sliderEl = document.getElementById("range-slider");
+  const startInput = document.getElementById("clip-start");
+  const endInput = document.getElementById("clip-end");
+  const recordingId = {{ recording.id }};
+  let slider = null;
+
+  function initSlider(duration) {
+    const defaultEnd = Math.min(10, duration);
+    noUiSlider.create(sliderEl, {
+      start: [0, defaultEnd],
+      connect: true,
+      range: { min: 0, max: Math.max(duration, 0.1) },
+      step: 0.1,
+    });
+    slider = sliderEl.noUiSlider;
+    slider.on("update", (values) => {
+      startInput.value = parseFloat(values[0]).toFixed(1);
+      endInput.value = parseFloat(values[1]).toFixed(1);
+    });
+  }
+
+  video.addEventListener("loadedmetadata", () => {
+    if (!slider) initSlider(video.duration);
+  }, { once: true });
+
+  function syncSliderFromInputs() {
+    if (slider) {
+      slider.set([parseFloat(startInput.value) || 0, parseFloat(endInput.value) || 0]);
+    }
+  }
+  startInput.addEventListener("change", syncSliderFromInputs);
+  endInput.addEventListener("change", syncSliderFromInputs);
+
+  document.getElementById("preview-btn").addEventListener("click", () => {
+    const start = parseFloat(startInput.value) || 0;
+    const end = parseFloat(endInput.value) || 0;
+    video.currentTime = start;
+    video.play();
+    const onTimeUpdate = () => {
+      if (video.currentTime >= end) {
+        video.pause();
+        video.removeEventListener("timeupdate", onTimeUpdate);
+      }
+    };
+    video.addEventListener("timeupdate", onTimeUpdate);
+  });
+
+  document.getElementById("download-btn").addEventListener("click", () => {
+    window.location = `/media/${recordingId}/clip?start=${startInput.value}&end=${endInput.value}`;
+  });
+
+  document.getElementById("save-mark-form").addEventListener("submit", () => {
+    document.getElementById("save-start").value = startInput.value;
+    document.getElementById("save-end").value = endInput.value;
+  });
+})();
+</script>
+{% endblock %}

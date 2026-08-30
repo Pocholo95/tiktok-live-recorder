@@ -115,8 +115,10 @@ docker run \
 
 Instead of fixing the recorded channels at container startup, `serve` mode
 runs a small web dashboard to add/remove channels on the fly, see live
-status per channel, and browse/play past recordings filtered by channel or
-date.
+status per channel, browse/play past recordings filtered by channel or
+date, and cut/download clips from a recording (generated on the fly and
+streamed straight to the browser - nothing is written to disk; only the
+in/out times are saved server-side if you bookmark them).
 
 ```bash
 docker compose up

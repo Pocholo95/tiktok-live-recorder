@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from db import channels_repo, recordings_repo  # noqa: E402
+from db import channels_repo, clip_marks_repo, recordings_repo  # noqa: E402
 from db.database import get_connection, init_db  # noqa: E402
 from utils.enums import Mode  # noqa: E402
 
@@ -116,3 +116,51 @@ def test_recording_delete_removes_row(tmp_path):
     recordings_repo.delete(conn, recording_id)
 
     assert recordings_repo.get(conn, recording_id) is None
+
+
+def test_clip_mark_round_trip(tmp_path):
+    db_path = str(tmp_path / "hub.db")
+    init_db(db_path)
+    conn = get_connection(db_path)
+
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    recording_id = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/a.mp4"
+    )
+
+    mark_id = clip_marks_repo.insert(
+        conn,
+        recording_id=recording_id,
+        start_seconds=12.5,
+        end_seconds=45.0,
+        label="highlight",
+    )
+
+    mark = clip_marks_repo.get(conn, mark_id)
+    assert mark["start_seconds"] == 12.5
+    assert mark["end_seconds"] == 45.0
+    assert mark["label"] == "highlight"
+
+    marks = clip_marks_repo.list_for_recording(conn, recording_id)
+    assert [m["id"] for m in marks] == [mark_id]
+
+    clip_marks_repo.delete(conn, mark_id)
+    assert clip_marks_repo.get(conn, mark_id) is None
+
+
+def test_clip_mark_deleted_when_recording_deleted(tmp_path):
+    db_path = str(tmp_path / "hub.db")
+    init_db(db_path)
+    conn = get_connection(db_path)
+
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    recording_id = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/a.mp4"
+    )
+    clip_marks_repo.insert(
+        conn, recording_id=recording_id, start_seconds=1, end_seconds=2
+    )
+
+    recordings_repo.delete(conn, recording_id)
+
+    assert clip_marks_repo.list_for_recording(conn, recording_id) == []

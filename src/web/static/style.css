@@ -232,3 +232,58 @@ table.channels-table {
 .settings-form button {
   align-self: flex-start;
 }
+
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.clip-video {
+  width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  display: block;
+  background: #000;
+  border-radius: 8px;
+}
+
+.range-slider {
+  margin: 2rem 0.5rem;
+}
+
+.range-slider .noUi-connect {
+  background: var(--accent);
+}
+
+.clip-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.clip-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.clip-mark-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.clip-mark-row a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.clip-mark-row a:hover {
+  text-decoration: underline;
+}

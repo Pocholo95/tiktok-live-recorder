@@ -3,7 +3,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
-from db import channels_repo, recordings_repo  # noqa: E402
+from db import channels_repo, clip_marks_repo, recordings_repo  # noqa: E402
 from db.database import get_connection  # noqa: E402
 from utils.enums import Mode  # noqa: E402
 
@@ -104,3 +104,63 @@ def test_delete_recording_is_a_noop_for_unknown_id(client):
 def test_settings_page_loads(client):
     response = client.get("/settings")
     assert response.status_code == 200
+
+
+def test_clip_editor_page_renders(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    recording_id = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/a.mp4"
+    )
+    recordings_repo.mark_completed(
+        conn, recording_id, file_path="/output/a.mp4", format="mp4"
+    )
+
+    response = client.get(f"/recordings/{recording_id}/clip")
+
+    assert response.status_code == 200
+    assert "creator" in response.text
+
+
+def test_clip_editor_404_for_unknown_recording(client):
+    response = client.get("/recordings/999/clip")
+    assert response.status_code == 404
+
+
+def test_create_and_delete_clip_mark(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    recording_id = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/a.mp4"
+    )
+
+    response = client.post(
+        f"/recordings/{recording_id}/clip-marks",
+        data={"start": "1.5", "end": "10.0", "label": "highlight"},
+    )
+
+    assert response.status_code == 200
+    assert "highlight" in response.text
+
+    marks = clip_marks_repo.list_for_recording(conn, recording_id)
+    assert len(marks) == 1
+    mark_id = marks[0]["id"]
+
+    response = client.delete(f"/clip-marks/{mark_id}")
+    assert response.status_code == 200
+    assert clip_marks_repo.get(conn, mark_id) is None
+
+
+def test_create_clip_mark_rejects_invalid_range(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    recording_id = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/a.mp4"
+    )
+
+    client.post(
+        f"/recordings/{recording_id}/clip-marks",
+        data={"start": "10", "end": "5", "label": "bad"},
+    )
+
+    assert clip_marks_repo.list_for_recording(conn, recording_id) == []

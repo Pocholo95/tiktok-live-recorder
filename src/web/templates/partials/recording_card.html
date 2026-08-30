@@ -22,6 +22,7 @@
   </div>
   <div class="recording-actions">
     <a href="/media/{{ recording.id }}/download">Descargar</a>
+    <a href="/recordings/{{ recording.id }}/clip">Recortar</a>
     <button
       hx-delete="/recordings/{{ recording.id }}"
       hx-target="closest .recording-card"

@@ -28,3 +28,16 @@ CREATE TABLE IF NOT EXISTS recordings (
 
 CREATE INDEX IF NOT EXISTS idx_recordings_channel ON recordings(channel_id);
 CREATE INDEX IF NOT EXISTS idx_recordings_started_at ON recordings(started_at);
+
+-- Only the in/out timestamps are stored - the clip itself is generated on
+-- demand and streamed straight to the browser, never written to disk.
+CREATE TABLE IF NOT EXISTS clip_marks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recording_id INTEGER NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+    label TEXT,
+    start_seconds REAL NOT NULL,
+    end_seconds REAL NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_clip_marks_recording ON clip_marks(recording_id);

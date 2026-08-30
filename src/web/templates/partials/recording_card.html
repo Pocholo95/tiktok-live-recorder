@@ -5,10 +5,11 @@
     loading="lazy"
     onclick="
       const v = this.nextElementSibling;
-      v.src = '/media/{{ recording.id }}';
-      v.hidden = false;
       this.hidden = true;
-      v.play();
+      v.hidden = false;
+      v.addEventListener('loadedmetadata', () => v.play(), {once: true});
+      v.src = '/media/{{ recording.id }}';
+      v.load();
     ">
   <video controls hidden preload="none"></video>
   <div class="recording-meta">

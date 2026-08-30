@@ -68,7 +68,10 @@ class ChannelSupervisor:
 
     def _reconcile_once(self):
         conn = get_connection(self.db_path)
-        enabled_rows = {row["id"]: row for row in channels_repo.list_enabled(conn)}
+        try:
+            enabled_rows = {row["id"]: row for row in channels_repo.list_enabled(conn)}
+        finally:
+            conn.close()
 
         for channel_id, (worker, fingerprint) in list(self._workers.items()):
             row = enabled_rows.get(channel_id)

@@ -20,49 +20,52 @@ def recover_orphaned_recordings(db_path, ffmpeg_path=None):
     forever claiming to still be recording.
     """
     conn = get_connection(db_path)
-    orphans = conn.execute(
-        "SELECT * FROM recordings WHERE status = 'recording'"
-    ).fetchall()
+    try:
+        orphans = conn.execute(
+            "SELECT * FROM recordings WHERE status = 'recording'"
+        ).fetchall()
 
-    if not orphans:
-        return
+        if not orphans:
+            return
 
-    logger.info(
-        f"Recovering {len(orphans)} orphaned recording(s) from a previous run..."
-    )
-
-    for recording in orphans:
-        file_path = recording["file_path"]
-        logger.info(f"Recovering recording #{recording['id']}: {file_path}")
-
-        if not file_path or not Path(file_path).is_file():
-            recordings_repo.mark_failed(
-                conn,
-                recording["id"],
-                error_message="File missing after restart - recording lost",
-            )
-            continue
-
-        final_path = VideoManagement.convert_flv_to_mp4(
-            file_path, ffmpeg_path=ffmpeg_path
+        logger.info(
+            f"Recovering {len(orphans)} orphaned recording(s) from a previous run..."
         )
-        if final_path:
-            thumbnail_path = generate_thumbnail(final_path, ffmpeg_path=ffmpeg_path)
-            try:
-                file_size_bytes = Path(final_path).stat().st_size
-            except OSError:
-                file_size_bytes = None
-            recordings_repo.mark_completed(
-                conn,
-                recording["id"],
-                file_path=final_path,
-                format="mp4",
-                file_size_bytes=file_size_bytes,
-                thumbnail_path=thumbnail_path,
+
+        for recording in orphans:
+            file_path = recording["file_path"]
+            logger.info(f"Recovering recording #{recording['id']}: {file_path}")
+
+            if not file_path or not Path(file_path).is_file():
+                recordings_repo.mark_failed(
+                    conn,
+                    recording["id"],
+                    error_message="File missing after restart - recording lost",
+                )
+                continue
+
+            final_path = VideoManagement.convert_flv_to_mp4(
+                file_path, ffmpeg_path=ffmpeg_path
             )
-        else:
-            recordings_repo.mark_failed(
-                conn,
-                recording["id"],
-                error_message="Conversion failed while recovering after restart",
-            )
+            if final_path:
+                thumbnail_path = generate_thumbnail(final_path, ffmpeg_path=ffmpeg_path)
+                try:
+                    file_size_bytes = Path(final_path).stat().st_size
+                except OSError:
+                    file_size_bytes = None
+                recordings_repo.mark_completed(
+                    conn,
+                    recording["id"],
+                    file_path=final_path,
+                    format="mp4",
+                    file_size_bytes=file_size_bytes,
+                    thumbnail_path=thumbnail_path,
+                )
+            else:
+                recordings_repo.mark_failed(
+                    conn,
+                    recording["id"],
+                    error_message="Conversion failed while recovering after restart",
+                )
+    finally:
+        conn.close()

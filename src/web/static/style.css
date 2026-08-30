@@ -126,6 +126,13 @@ table.channels-table {
   background: #000;
 }
 
+/* `display: block` above beats the browser's default `[hidden]{display:none}`
+   rule (higher specificity), so the empty <video> was always visible on top
+   of the thumbnail instead of only after being un-hidden by the onclick. */
+.recording-card video[hidden] {
+  display: none;
+}
+
 .recording-meta {
   padding: 0.5rem 0.7rem;
   display: flex;

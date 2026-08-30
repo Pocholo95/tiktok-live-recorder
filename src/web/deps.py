@@ -4,7 +4,11 @@ from db.database import get_connection
 
 
 def get_db(request: Request):
-    return get_connection(request.app.state.db_path)
+    conn = get_connection(request.app.state.db_path)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def get_supervisor(request: Request):

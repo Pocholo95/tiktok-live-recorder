@@ -78,37 +78,44 @@ class Worker:
                 self._status_store.set(self.channel_id, phase="idle")
 
     def _on_status(self, phase, **data):
-        conn = self._get_connection(self._db_path)
-
+        # These don't touch the DB - handle them without opening a
+        # connection (they fire far more often than the recording ones).
         if phase == "checking":
             self._status_store.set(self.channel_id, phase="checking")
+            return
 
-        elif phase == "offline":
+        if phase == "offline":
             self._status_store.set(self.channel_id, phase="offline")
+            return
 
-        elif phase == "recording_started":
-            self._recording_started_at = time.time()
-            self._current_recording_id = recordings_repo.start(
-                conn,
-                channel_id=self.channel_id,
-                username=data.get("user", self.username),
-                file_path=data["file_path"],
-                format="flv",
-            )
-            self._status_store.set(
-                self.channel_id, phase="recording", detail=data.get("file_path")
-            )
-
-        elif phase == "converting":
+        if phase == "converting":
             self._status_store.set(
                 self.channel_id, phase="converting", detail=data.get("file_path")
             )
+            return
 
-        elif phase == "recording_finished":
-            self._finish_recording(conn, **data)
+        conn = self._get_connection(self._db_path)
+        try:
+            if phase == "recording_started":
+                self._recording_started_at = time.time()
+                self._current_recording_id = recordings_repo.start(
+                    conn,
+                    channel_id=self.channel_id,
+                    username=data.get("user", self.username),
+                    file_path=data["file_path"],
+                    format="flv",
+                )
+                self._status_store.set(
+                    self.channel_id, phase="recording", detail=data.get("file_path")
+                )
 
-        elif phase == "recording_error":
-            self._fail_recording(conn, data.get("error", "unknown error"))
+            elif phase == "recording_finished":
+                self._finish_recording(conn, **data)
+
+            elif phase == "recording_error":
+                self._fail_recording(conn, data.get("error", "unknown error"))
+        finally:
+            conn.close()
 
     def _finish_recording(self, conn, *, file_path, format="mp4", **_ignored):
         duration_seconds = None

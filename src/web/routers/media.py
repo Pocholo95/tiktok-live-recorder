@@ -12,6 +12,8 @@ _PLACEHOLDER_THUMBNAIL = (
     Path(__file__).resolve().parent.parent / "static" / "placeholder.svg"
 )
 
+_MEDIA_TYPES = {"mkv": "video/x-matroska", "flv": "video/x-flv"}
+
 
 @router.get("/media/{recording_id}")
 def get_media(recording_id: int, db=Depends(get_db)):
@@ -28,7 +30,7 @@ def get_media(recording_id: int, db=Depends(get_db)):
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Recording file not found on disk")
 
-    media_type = "video/x-matroska" if recording["format"] == "mkv" else "video/mp4"
+    media_type = _MEDIA_TYPES.get(recording["format"], "video/mp4")
     return FileResponse(path, media_type=media_type)
 
 

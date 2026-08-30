@@ -5,6 +5,7 @@ def main():
     import uvicorn
 
     from db.database import init_db
+    from supervisor.reconcile import recover_orphaned_recordings
     from supervisor.supervisor import ChannelSupervisor
     from utils.dependencies import check_ffmpeg
     from utils.utils import banner
@@ -20,6 +21,11 @@ def main():
 
     db_path = os.environ.get("HUB_DB_PATH", os.path.join(output_dir, "hub.db"))
     init_db(db_path)
+
+    # Any recording still marked "recording" at this point predates this
+    # process (a container restart/crash mid-recording, most commonly) -
+    # finish converting it or mark it failed before workers start.
+    recover_orphaned_recordings(db_path, ffmpeg_path=ffmpeg_path)
 
     reconcile_interval = int(os.environ.get("HUB_RECONCILE_INTERVAL", "5"))
     supervisor = ChannelSupervisor(

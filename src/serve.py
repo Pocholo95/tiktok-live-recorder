@@ -1,4 +1,5 @@
 import os
+import threading
 
 
 def main():
@@ -24,8 +25,16 @@ def main():
 
     # Any recording still marked "recording" at this point predates this
     # process (a container restart/crash mid-recording, most commonly) -
-    # finish converting it or mark it failed before workers start.
-    recover_orphaned_recordings(db_path, ffmpeg_path=ffmpeg_path)
+    # finish converting it or mark it failed. Runs in the background so a
+    # big backlog of orphaned files (or a low CPU cap) doesn't delay the
+    # dashboard from coming up.
+    threading.Thread(
+        target=recover_orphaned_recordings,
+        args=(db_path,),
+        kwargs={"ffmpeg_path": ffmpeg_path},
+        name="orphan-recovery",
+        daemon=True,
+    ).start()
 
     reconcile_interval = int(os.environ.get("HUB_RECONCILE_INTERVAL", "5"))
     supervisor = ChannelSupervisor(

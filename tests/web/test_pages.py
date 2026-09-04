@@ -67,6 +67,22 @@ def test_library_filters_by_channel(client, app):
     assert "No hay grabaciones" in response.text
 
 
+def test_library_treats_empty_query_params_as_unset(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/a_flv.flv"
+    )
+
+    # A <select> with an empty "Todos los canales" option (or a hand-edited
+    # URL) submits channel_id= / recording_id= as empty strings, not an
+    # absent param - these must not 422.
+    response = client.get("/library?channel_id=&recording_id=")
+
+    assert response.status_code == 200
+    assert "@creator" in response.text
+
+
 def test_delete_recording_removes_row_and_files(client, app):
     conn = get_connection(app.state.db_path)
     channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)

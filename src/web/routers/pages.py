@@ -124,16 +124,29 @@ def delete_channel(channel_id: int, db=Depends(get_db)):
     return PlainTextResponse("")
 
 
+def _parse_int(value):
+    try:
+        return int(value) if value else None
+    except (TypeError, ValueError):
+        return None
+
+
 @router.get("/library", response_class=HTMLResponse)
 def library(
     request: Request,
-    recording_id: int | None = None,
-    channel_id: int | None = None,
+    recording_id: str | None = None,
+    channel_id: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     db=Depends(get_db),
     templates=Depends(get_templates),
 ):
+    # Query params come from plain HTML forms/links, where an unset <select>
+    # or a cleared field arrives as an empty string, not an absent param -
+    # int-typed FastAPI params would 422 on "" instead of treating it as None.
+    recording_id = _parse_int(recording_id)
+    channel_id = _parse_int(channel_id)
+
     channels = channels_repo.list_all(db)
     recordings = recordings_repo.list_filtered(
         db,

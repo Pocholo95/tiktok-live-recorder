@@ -226,6 +226,7 @@ def create_clip_mark(
     db=Depends(get_db),
     templates=Depends(get_templates),
 ):
+    error = None
     if end > start >= 0:
         clip_marks_repo.insert(
             db,
@@ -234,12 +235,17 @@ def create_clip_mark(
             end_seconds=end,
             label=label.strip() or None,
         )
+    else:
+        error = (
+            f"No se guardó: el rango {start:.1f}s-{end:.1f}s no es válido "
+            "(el fin debe ser mayor al inicio)."
+        )
 
     marks = clip_marks_repo.list_for_recording(db, recording_id)
     return templates.TemplateResponse(
         request,
         "partials/clip_marks.html",
-        {"recording_id": recording_id, "marks": marks},
+        {"recording_id": recording_id, "marks": marks, "error": error},
     )
 
 

@@ -30,8 +30,6 @@
   hx-target="#clip-marks-list"
   hx-swap="innerHTML"
   class="settings-form">
-  <input type="hidden" name="start" id="save-start">
-  <input type="hidden" name="end" id="save-end">
   <label>Nombre (opcional) <input type="text" name="label" placeholder="ej. gol, momento gracioso"></label>
   <button type="submit">Guardar marca</button>
 </form>
@@ -119,9 +117,13 @@
     window.location = `/media/${recordingId}/clip?start=${start}&end=${end}`;
   });
 
-  document.getElementById("save-mark-form").addEventListener("submit", () => {
-    document.getElementById("save-start").value = parseHMS(startInput.value);
-    document.getElementById("save-end").value = parseHMS(endInput.value);
+  // Inject start/end via htmx's own pre-request hook instead of writing to
+  // hidden inputs on "submit" - that relied on this listener running
+  // before htmx's own submit handler, which isn't guaranteed. configRequest
+  // fires right as htmx builds the request, so this always wins.
+  document.getElementById("save-mark-form").addEventListener("htmx:configRequest", (evt) => {
+    evt.detail.parameters.start = parseHMS(startInput.value);
+    evt.detail.parameters.end = parseHMS(endInput.value);
   });
 
   document.getElementById("delete-recording-btn").addEventListener("click", () => {

@@ -201,9 +201,10 @@ def test_create_clip_mark_rejects_invalid_range(client, app):
         conn, channel_id=channel_id, username="creator", file_path="/output/a.mp4"
     )
 
-    client.post(
+    response = client.post(
         f"/recordings/{recording_id}/clip-marks",
         data={"start": "10", "end": "5", "label": "bad"},
     )
 
     assert clip_marks_repo.list_for_recording(conn, recording_id) == []
+    assert "No se guardó" in response.text  # failure is visible, not silent

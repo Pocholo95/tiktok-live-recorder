@@ -1,20 +1,51 @@
 {% extends "base.html" %}
 {% block title %}Library - TikTok Live Recorder Hub{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="/static/nouislider.min.css">
+<script src="/static/nouislider.min.js"></script>
+
 <h1>Grabaciones</h1>
 
-<form class="filters" hx-get="/partials/recordings" hx-target="#recordings-grid" hx-trigger="change" hx-swap="innerHTML">
-  <select name="channel_id">
-    <option value="">Todos los canales</option>
-    {% for channel in channels %}
-    <option value="{{ channel.id }}">@{{ channel.username }}</option>
-    {% endfor %}
-  </select>
-  <input type="date" name="date_from">
-  <input type="date" name="date_to">
-</form>
+<div class="library-layout">
+  <aside class="library-sidebar">
+    <form class="filters" method="get" action="/library">
+      <select name="channel_id" onchange="this.form.submit()">
+        <option value="">Todos los canales</option>
+        {% for channel in channels %}
+        <option value="{{ channel.id }}" {% if selected_channel_id and channel.id == selected_channel_id %}selected{% endif %}>@{{ channel.username }}</option>
+        {% endfor %}
+      </select>
+      <input type="date" name="date_from" value="{{ date_from or '' }}" onchange="this.form.submit()">
+      <input type="date" name="date_to" value="{{ date_to or '' }}" onchange="this.form.submit()">
+    </form>
 
-<div id="recordings-grid" class="recordings-grid">
-  {% include "partials/recording_cards.html" %}
+    <div class="recording-list">
+      {% for group in groups %}
+      <div class="recording-date-header">{{ group.date }}</div>
+      {% for recording in group.recordings %}
+      <a
+        href="/library?recording_id={{ recording.id }}{% if selected_channel_id %}&channel_id={{ selected_channel_id }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
+        class="recording-list-item{% if selected_recording and recording.id == selected_recording.id %} active{% endif %}">
+        <img src="/media/{{ recording.id }}/thumbnail" alt="" loading="lazy">
+        <div class="recording-list-item-info">
+          <strong>@{{ recording.username }}</strong>
+          <span>{{ recording.started_at[11:16] }}</span>
+          <span>{{ recording.clip_count }} clip{{ "s" if recording.clip_count != 1 else "" }}</span>
+        </div>
+      </a>
+      {% endfor %}
+      {% else %}
+      <p class="empty" style="padding: 0.75rem;">No hay grabaciones para este filtro.</p>
+      {% endfor %}
+    </div>
+  </aside>
+
+  <main class="library-main">
+    {% if selected_recording %}
+      {% include "partials/library_player.html" %}
+    {% else %}
+      <p class="empty">Todavía no hay ninguna grabación.</p>
+    {% endif %}
+  </main>
 </div>
 {% endblock %}

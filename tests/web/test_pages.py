@@ -49,7 +49,7 @@ def test_delete_channel_removes_row(client, app):
     assert channels_repo.get(conn, channel_id) is None
 
 
-def test_recordings_partial_filters_by_channel(client, app):
+def test_library_filters_by_channel(client, app):
     conn = get_connection(app.state.db_path)
     channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
     recordings_repo.start(
@@ -60,10 +60,10 @@ def test_recordings_partial_filters_by_channel(client, app):
     assert response.status_code == 200
     assert "@creator" in response.text
 
-    response = client.get(f"/partials/recordings?channel_id={channel_id}")
+    response = client.get(f"/library?channel_id={channel_id}")
     assert "creator" in response.text
 
-    response = client.get(f"/partials/recordings?channel_id={channel_id + 999}")
+    response = client.get(f"/library?channel_id={channel_id + 999}")
     assert "No hay grabaciones" in response.text
 
 
@@ -106,7 +106,7 @@ def test_settings_page_loads(client):
     assert response.status_code == 200
 
 
-def test_clip_editor_page_renders(client, app):
+def test_library_shows_selected_recording(client, app):
     conn = get_connection(app.state.db_path)
     channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
     recording_id = recordings_repo.start(
@@ -116,15 +116,40 @@ def test_clip_editor_page_renders(client, app):
         conn, recording_id, file_path="/output/a.mp4", format="mp4"
     )
 
-    response = client.get(f"/recordings/{recording_id}/clip")
+    response = client.get(f"/library?recording_id={recording_id}")
 
     assert response.status_code == 200
     assert "creator" in response.text
+    assert "Eliminar grabación" in response.text
 
 
-def test_clip_editor_404_for_unknown_recording(client):
-    response = client.get("/recordings/999/clip")
-    assert response.status_code == 404
+def test_library_defaults_to_most_recent_recording_when_none_selected(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    recording_id = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/a.mp4"
+    )
+    recordings_repo.mark_completed(
+        conn, recording_id, file_path="/output/a.mp4", format="mp4"
+    )
+
+    response = client.get("/library")
+
+    assert response.status_code == 200
+    assert "Eliminar grabación" in response.text
+
+
+def test_old_clip_route_redirects_to_library(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    recording_id = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/a.mp4"
+    )
+
+    response = client.get(f"/recordings/{recording_id}/clip", follow_redirects=False)
+
+    assert response.status_code in (302, 303, 307)
+    assert response.headers["location"] == f"/library?recording_id={recording_id}"
 
 
 def test_create_and_delete_clip_mark(client, app):

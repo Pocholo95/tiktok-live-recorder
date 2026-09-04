@@ -1,33 +1,32 @@
-{% extends "base.html" %}
-{% block title %}Recortar - TikTok Live Recorder Hub{% endblock %}
-{% block content %}
-<link rel="stylesheet" href="/static/nouislider.min.css">
-<script src="/static/nouislider.min.js"></script>
-
-<p><a href="/library">&larr; Volver a la biblioteca</a></p>
 <div class="editor-header">
-  <h1>Recortar @{{ recording.username }}</h1>
+  <h1>@{{ selected_recording.username }}</h1>
   <button type="button" id="delete-recording-btn" class="button-danger">Eliminar grabación</button>
 </div>
 
 <video id="clip-video" controls preload="metadata" class="clip-video">
-  <source src="/media/{{ recording.id }}">
+  <source src="/media/{{ selected_recording.id }}">
 </video>
 
 <div id="range-slider" class="range-slider"></div>
 
 <div class="clip-controls">
   <label>Inicio <input type="text" id="clip-start" placeholder="00:00:00"></label>
+  <button type="button" id="mark-start-btn" title="Usa el tiempo actual del video (atajo: I)">Marcar inicio aquí</button>
   <label>Fin <input type="text" id="clip-end" placeholder="00:00:00"></label>
+  <button type="button" id="mark-end-btn" title="Usa el tiempo actual del video (atajo: O)">Marcar fin aquí</button>
   <button id="preview-btn" type="button">Previsualizar</button>
   <button id="download-btn" type="button">Descargar clip</button>
 </div>
 
-<p class="hint">El clip se genera al vuelo y se descarga directo - no queda guardado en el servidor, solo el rango de tiempo si lo guardás abajo.</p>
+<p class="hint">
+  El clip se genera al vuelo y se descarga directo - no queda guardado en el servidor, solo el
+  rango de tiempo si lo guardás abajo. Atajos: con el video enfocado, <strong>I</strong> marca el
+  inicio y <strong>O</strong> marca el fin con el tiempo actual.
+</p>
 
 <form
   id="save-mark-form"
-  hx-post="/recordings/{{ recording.id }}/clip-marks"
+  hx-post="/recordings/{{ selected_recording.id }}/clip-marks"
   hx-target="#clip-marks-list"
   hx-swap="innerHTML"
   class="settings-form">
@@ -48,7 +47,7 @@
   const sliderEl = document.getElementById("range-slider");
   const startInput = document.getElementById("clip-start");
   const endInput = document.getElementById("clip-end");
-  const recordingId = {{ recording.id }};
+  const recordingId = {{ selected_recording.id }};
   let slider = null;
 
   function formatHMS(totalSeconds) {
@@ -126,7 +125,7 @@
   });
 
   document.getElementById("delete-recording-btn").addEventListener("click", () => {
-    if (!confirm("¿Eliminar esta grabación de @{{ recording.username }}? No se puede deshacer.")) {
+    if (!confirm("¿Eliminar esta grabación de @{{ selected_recording.username }}? No se puede deshacer.")) {
       return;
     }
     fetch(`/recordings/${recordingId}`, { method: "DELETE" }).then((response) => {
@@ -135,6 +134,25 @@
       }
     });
   });
+
+  // Capture the video's current playback position into start/end - an
+  // easier alternative to dragging the slider or typing a time by hand.
+  function markStartHere() {
+    startInput.value = formatHMS(video.currentTime);
+    syncSliderFromInputs();
+  }
+  function markEndHere() {
+    endInput.value = formatHMS(video.currentTime);
+    syncSliderFromInputs();
+  }
+  document.getElementById("mark-start-btn").addEventListener("click", markStartHere);
+  document.getElementById("mark-end-btn").addEventListener("click", markEndHere);
+
+  document.addEventListener("keydown", (e) => {
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea") return;
+    if (e.key === "i" || e.key === "I") markStartHere();
+    if (e.key === "o" || e.key === "O") markEndHere();
+  });
 })();
 </script>
-{% endblock %}

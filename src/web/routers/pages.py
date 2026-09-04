@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
 from db import channels_repo, clip_marks_repo, recordings_repo
@@ -125,31 +125,60 @@ def delete_channel(channel_id: int, db=Depends(get_db)):
 
 
 @router.get("/library", response_class=HTMLResponse)
-def library(request: Request, db=Depends(get_db), templates=Depends(get_templates)):
-    channels = channels_repo.list_all(db)
-    recordings = recordings_repo.list_filtered(db)
-    return templates.TemplateResponse(
-        request, "library.html", {"channels": channels, "recordings": recordings}
-    )
-
-
-@router.get("/partials/recordings", response_class=HTMLResponse)
-def recordings_partial(
+def library(
     request: Request,
+    recording_id: int | None = None,
     channel_id: int | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     db=Depends(get_db),
     templates=Depends(get_templates),
 ):
+    channels = channels_repo.list_all(db)
     recordings = recordings_repo.list_filtered(
         db,
         channel_id=channel_id,
         date_from=date_from or None,
         date_to=f"{date_to} 23:59:59" if date_to else None,
     )
+
+    counts = clip_marks_repo.count_for_recordings(db, [r["id"] for r in recordings])
+
+    groups = []
+    current_date = None
+    for row in recordings:
+        date_str = (row["started_at"] or "")[:10]
+        entry = dict(row)
+        entry["clip_count"] = counts.get(row["id"], 0)
+        if date_str != current_date:
+            current_date = date_str
+            groups.append({"date": date_str, "recordings": []})
+        groups[-1]["recordings"].append(entry)
+
+    selected_recording = (
+        recordings_repo.get(db, recording_id) if recording_id is not None else None
+    )
+    if selected_recording is None and recordings:
+        selected_recording = recordings[0]
+
+    marks = (
+        clip_marks_repo.list_for_recording(db, selected_recording["id"])
+        if selected_recording is not None
+        else []
+    )
+
     return templates.TemplateResponse(
-        request, "partials/recording_cards.html", {"recordings": recordings}
+        request,
+        "library.html",
+        {
+            "channels": channels,
+            "groups": groups,
+            "selected_recording": selected_recording,
+            "marks": marks,
+            "selected_channel_id": channel_id,
+            "date_from": date_from,
+            "date_to": date_to,
+        },
     )
 
 
@@ -166,21 +195,12 @@ def delete_recording(recording_id: int, db=Depends(get_db)):
     return PlainTextResponse("")
 
 
-@router.get("/recordings/{recording_id}/clip", response_class=HTMLResponse)
-def clip_editor(
-    request: Request,
-    recording_id: int,
-    db=Depends(get_db),
-    templates=Depends(get_templates),
-):
-    recording = recordings_repo.get(db, recording_id)
-    if recording is None:
-        raise HTTPException(status_code=404, detail="Recording not found")
-
-    marks = clip_marks_repo.list_for_recording(db, recording_id)
-    return templates.TemplateResponse(
-        request, "clip_editor.html", {"recording": recording, "marks": marks}
-    )
+@router.get("/recordings/{recording_id}/clip")
+def clip_editor_redirect(recording_id: int):
+    # The clip editor is now embedded in /library itself (selecting a
+    # recording from the sidebar shows it) - kept as a redirect so old
+    # bookmarks/links still land somewhere useful.
+    return RedirectResponse(url=f"/library?recording_id={recording_id}")
 
 
 @router.post("/recordings/{recording_id}/clip-marks", response_class=HTMLResponse)

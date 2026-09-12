@@ -26,7 +26,7 @@
       <a
         href="/library?recording_id={{ recording.id }}{% if selected_channel_id %}&channel_id={{ selected_channel_id }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
         hx-get="/library?recording_id={{ recording.id }}{% if selected_channel_id %}&channel_id={{ selected_channel_id }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
-        hx-target="#library-content"
+        hx-target="#library-main"
         hx-swap="outerHTML transition:true"
         hx-push-url="true"
         class="recording-list-item{% if selected_recording and recording.id == selected_recording.id %} active{% endif %}">
@@ -44,11 +44,5 @@
     </div>
   </aside>
 
-  <main class="library-main">
-    {% if selected_recording %}
-      {% include "partials/library_player.html" %}
-    {% else %}
-      <p class="empty">Todavía no hay ninguna grabación.</p>
-    {% endif %}
-  </main>
+  {% include "partials/library_main.html" %}
 </div>

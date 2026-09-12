@@ -161,6 +161,30 @@ def test_library_htmx_request_returns_partial_without_page_chrome(client, app):
     assert 'id="library-content"' in response.text
 
 
+def test_library_recording_click_only_swaps_the_player_panel(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    recording_id = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/a.mp4"
+    )
+    recordings_repo.mark_completed(
+        conn, recording_id, file_path="/output/a.mp4", format="mp4"
+    )
+
+    response = client.get(
+        f"/library?recording_id={recording_id}",
+        headers={"HX-Request": "true", "HX-Target": "library-main"},
+    )
+
+    assert response.status_code == 200
+    assert "Eliminar grabación" in response.text
+    assert 'id="library-main"' in response.text
+    # Selecting a recording must not re-render the sidebar - that would
+    # reset its scroll position on every click.
+    assert 'class="library-sidebar"' not in response.text
+    assert "recording-list-item" not in response.text
+
+
 def test_library_defaults_to_most_recent_recording_when_none_selected(client, app):
     conn = get_connection(app.state.db_path)
     channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)

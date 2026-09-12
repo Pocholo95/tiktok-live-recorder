@@ -180,14 +180,19 @@ def library(
         else []
     )
 
-    # A sidebar/filter click sends the request via htmx to swap just the
-    # two-column panel in place - returning the full page (nav + <html>) for
-    # that would nest a document inside a document.
-    template_name = (
-        "partials/library_content.html"
-        if request.headers.get("hx-request") == "true"
-        else "library.html"
-    )
+    # Picking a recording only swaps the player panel (#library-main), so the
+    # sidebar's scroll position survives; changing a filter swaps the whole
+    # two-column panel since the recording list itself changes. htmx sends
+    # the target element's id in HX-Target, telling us which one to render.
+    # Returning the full page (nav + <html>) for either would nest a
+    # document inside a document.
+    hx_target = request.headers.get("hx-target")
+    if hx_target == "library-main":
+        template_name = "partials/library_main.html"
+    elif request.headers.get("hx-request") == "true":
+        template_name = "partials/library_content.html"
+    else:
+        template_name = "library.html"
     return templates.TemplateResponse(
         request,
         template_name,

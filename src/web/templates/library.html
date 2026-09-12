@@ -7,4 +7,19 @@
 <h1>Grabaciones</h1>
 
 {% include "partials/library_content.html" %}
+
+<script>
+// A recording click only swaps #library-main (to keep the sidebar's scroll
+// position untouched), so the sidebar's own "active" class is stale until
+// the next full sidebar re-render (page load or filter change). Update it
+// immediately here instead of waiting on the server.
+document.addEventListener("click", (e) => {
+  const item = e.target.closest(".recording-list-item");
+  if (!item) return;
+  document.querySelectorAll(".recording-list-item.active").forEach((el) => {
+    el.classList.remove("active");
+  });
+  item.classList.add("active");
+});
+</script>
 {% endblock %}

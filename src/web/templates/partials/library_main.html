@@ -1,0 +1,7 @@
+<main class="library-main" id="library-main">
+  {% if selected_recording %}
+    {% include "partials/library_player.html" %}
+  {% else %}
+    <p class="empty">Todavía no hay ninguna grabación.</p>
+  {% endif %}
+</main>

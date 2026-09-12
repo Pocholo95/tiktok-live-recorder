@@ -193,6 +193,11 @@ table.channels-table {
   min-width: 0;
 }
 
+#library-content.htmx-request {
+  opacity: 0.6;
+  transition: opacity 100ms ease;
+}
+
 .button-danger {
   background: transparent;
   border-color: var(--error);

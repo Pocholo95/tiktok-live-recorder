@@ -139,6 +139,28 @@ def test_library_shows_selected_recording(client, app):
     assert "Eliminar grabación" in response.text
 
 
+def test_library_htmx_request_returns_partial_without_page_chrome(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    recording_id = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/a.mp4"
+    )
+    recordings_repo.mark_completed(
+        conn, recording_id, file_path="/output/a.mp4", format="mp4"
+    )
+
+    response = client.get(
+        f"/library?recording_id={recording_id}", headers={"HX-Request": "true"}
+    )
+
+    assert response.status_code == 200
+    assert "Eliminar grabación" in response.text
+    # A partial swap must not nest the page chrome inside itself.
+    assert "<html" not in response.text
+    assert 'class="nav"' not in response.text
+    assert 'id="library-content"' in response.text
+
+
 def test_library_defaults_to_most_recent_recording_when_none_selected(client, app):
     conn = get_connection(app.state.db_path)
     channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)

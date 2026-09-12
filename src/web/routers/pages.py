@@ -180,9 +180,17 @@ def library(
         else []
     )
 
+    # A sidebar/filter click sends the request via htmx to swap just the
+    # two-column panel in place - returning the full page (nav + <html>) for
+    # that would nest a document inside a document.
+    template_name = (
+        "partials/library_content.html"
+        if request.headers.get("hx-request") == "true"
+        else "library.html"
+    )
     return templates.TemplateResponse(
         request,
-        "library.html",
+        template_name,
         {
             "channels": channels,
             "groups": groups,

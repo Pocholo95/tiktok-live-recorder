@@ -79,9 +79,18 @@
     });
   }
 
-  video.addEventListener("loadedmetadata", () => {
-    if (!slider) initSlider(video.duration);
-  }, { once: true });
+  // A swapped-in video can finish loading metadata before this script even
+  // runs (fast local files, or the element already sat in the browser's
+  // cache from a previous visit) - a plain "loadedmetadata" listener would
+  // then never fire, leaving the slider uninitialized. Check readyState
+  // first and only wait for the event if metadata truly isn't there yet.
+  if (video.readyState >= 1) {
+    initSlider(video.duration);
+  } else {
+    video.addEventListener("loadedmetadata", () => {
+      if (!slider) initSlider(video.duration);
+    }, { once: true });
+  }
 
   function syncSliderFromInputs() {
     if (slider) {

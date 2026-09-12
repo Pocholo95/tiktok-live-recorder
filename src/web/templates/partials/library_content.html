@@ -1,0 +1,54 @@
+<div class="library-layout" id="library-content">
+  <aside class="library-sidebar">
+    <form
+      class="filters"
+      method="get"
+      action="/library"
+      hx-get="/library"
+      hx-target="#library-content"
+      hx-swap="outerHTML transition:true"
+      hx-push-url="true"
+      hx-trigger="change">
+      <select name="channel_id">
+        <option value="">Todos los canales</option>
+        {% for channel in channels %}
+        <option value="{{ channel.id }}" {% if selected_channel_id and channel.id == selected_channel_id %}selected{% endif %}>@{{ channel.username }}</option>
+        {% endfor %}
+      </select>
+      <input type="date" name="date_from" value="{{ date_from or '' }}">
+      <input type="date" name="date_to" value="{{ date_to or '' }}">
+    </form>
+
+    <div class="recording-list">
+      {% for group in groups %}
+      <div class="recording-date-header">{{ group.date }}</div>
+      {% for recording in group.recordings %}
+      <a
+        href="/library?recording_id={{ recording.id }}{% if selected_channel_id %}&channel_id={{ selected_channel_id }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
+        hx-get="/library?recording_id={{ recording.id }}{% if selected_channel_id %}&channel_id={{ selected_channel_id }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
+        hx-target="#library-content"
+        hx-swap="outerHTML transition:true"
+        hx-push-url="true"
+        class="recording-list-item{% if selected_recording and recording.id == selected_recording.id %} active{% endif %}">
+        <img src="/media/{{ recording.id }}/thumbnail" alt="" loading="lazy">
+        <div class="recording-list-item-info">
+          <strong>@{{ recording.username }}</strong>
+          <span>{{ recording.started_at[11:16] }}</span>
+          <span>{{ recording.clip_count }} clip{{ "s" if recording.clip_count != 1 else "" }}</span>
+        </div>
+      </a>
+      {% endfor %}
+      {% else %}
+      <p class="empty" style="padding: 0.75rem;">No hay grabaciones para este filtro.</p>
+      {% endfor %}
+    </div>
+  </aside>
+
+  <main class="library-main">
+    {% if selected_recording %}
+      {% include "partials/library_player.html" %}
+    {% else %}
+      <p class="empty">Todavía no hay ninguna grabación.</p>
+    {% endif %}
+  </main>
+</div>

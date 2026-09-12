@@ -61,6 +61,13 @@ class VideoManagement:
             "ac": 2,
             "avoid_negative_ts": "make_zero",
             "movflags": "+faststart",
+            # libx264's default keyframe interval (~250 frames, i.e. 8-10s at
+            # typical live fps) makes the browser's seek bar feel chunky -
+            # scrubbing can only land on a decodable frame every 8-10s. A
+            # forced keyframe every 2s (independent of source fps) gives
+            # smooth, near-instant seeking at the cost of a slightly larger
+            # file.
+            "force_key_frames": "expr:gte(t,n_forced*2)",
             "y": "-y",
         }
         if bitrate:

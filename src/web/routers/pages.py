@@ -138,6 +138,7 @@ def library(
     channel_id: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    no_clips: str | None = None,
     db=Depends(get_db),
     templates=Depends(get_templates),
 ):
@@ -146,6 +147,7 @@ def library(
     # int-typed FastAPI params would 422 on "" instead of treating it as None.
     recording_id = _parse_int(recording_id)
     channel_id = _parse_int(channel_id)
+    no_clips_only = no_clips not in (None, "", "0", "false")
 
     channels = channels_repo.list_all(db)
     recordings = recordings_repo.list_filtered(
@@ -156,6 +158,8 @@ def library(
     )
 
     counts = clip_marks_repo.count_for_recordings(db, [r["id"] for r in recordings])
+    if no_clips_only:
+        recordings = [r for r in recordings if counts.get(r["id"], 0) == 0]
 
     groups = []
     current_date = None
@@ -204,6 +208,7 @@ def library(
             "selected_channel_id": channel_id,
             "date_from": date_from,
             "date_to": date_to,
+            "no_clips_only": no_clips_only,
         },
     )
 

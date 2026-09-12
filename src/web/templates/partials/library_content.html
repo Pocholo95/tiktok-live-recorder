@@ -17,6 +17,10 @@
       </select>
       <input type="date" name="date_from" value="{{ date_from or '' }}">
       <input type="date" name="date_to" value="{{ date_to or '' }}">
+      <label class="filter-checkbox">
+        <input type="checkbox" name="no_clips" value="1" {% if no_clips_only %}checked{% endif %}>
+        Solo sin clips
+      </label>
     </form>
 
     <div class="recording-list">
@@ -24,8 +28,8 @@
       <div class="recording-date-header">{{ group.date }}</div>
       {% for recording in group.recordings %}
       <a
-        href="/library?recording_id={{ recording.id }}{% if selected_channel_id %}&channel_id={{ selected_channel_id }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
-        hx-get="/library?recording_id={{ recording.id }}{% if selected_channel_id %}&channel_id={{ selected_channel_id }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}"
+        href="/library?recording_id={{ recording.id }}{% if selected_channel_id %}&channel_id={{ selected_channel_id }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if no_clips_only %}&no_clips=1{% endif %}"
+        hx-get="/library?recording_id={{ recording.id }}{% if selected_channel_id %}&channel_id={{ selected_channel_id }}{% endif %}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if no_clips_only %}&no_clips=1{% endif %}"
         hx-target="#library-main"
         hx-swap="outerHTML transition:true"
         hx-push-url="true"

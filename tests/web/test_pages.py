@@ -67,6 +67,33 @@ def test_library_filters_by_channel(client, app):
     assert "No hay grabaciones" in response.text
 
 
+def test_library_filters_recordings_without_clips(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    with_clip = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/a.mp4"
+    )
+    recordings_repo.mark_completed(
+        conn, with_clip, file_path="/output/a.mp4", format="mp4"
+    )
+    clip_marks_repo.insert(
+        conn, recording_id=with_clip, start_seconds=1.0, end_seconds=2.0, label=None
+    )
+
+    without_clip = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/b.mp4"
+    )
+    recordings_repo.mark_completed(
+        conn, without_clip, file_path="/output/b.mp4", format="mp4"
+    )
+
+    response = client.get("/library?no_clips=1")
+
+    assert response.status_code == 200
+    assert f"recording_id={without_clip}" in response.text
+    assert f"recording_id={with_clip}" not in response.text
+
+
 def test_library_treats_empty_query_params_as_unset(client, app):
     conn = get_connection(app.state.db_path)
     channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)

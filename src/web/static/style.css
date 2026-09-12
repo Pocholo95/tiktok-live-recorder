@@ -126,8 +126,23 @@ table.channels-table {
 }
 
 .library-sidebar .filters select,
-.library-sidebar .filters input {
+.library-sidebar .filters input[type="date"] {
   width: 100%;
+}
+
+.filter-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.filter-checkbox input {
+  width: auto;
+  padding: 0;
+  border: none;
+  background: transparent;
 }
 
 .recording-list {

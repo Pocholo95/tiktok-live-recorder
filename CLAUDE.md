@@ -61,10 +61,12 @@ copies of the `*.example` files.
   (`recordings_repo.creator_summaries`), so creators whose channel was
   deleted still show up. Timestamps in the DB are UTC (`datetime('now')`);
   the `ago` filter renders relative times.
-- Telegram notices: `notify/telegram_bot.py` (Bot API, `bot_token` /
-  `bot_chat_id` in telegram.json). The per-channel switch is the old
-  `use_telegram` column; the worker reads it from the DB each time, and it
-  is intentionally not a supervisor restart trigger.
+- Live notices go to a Discord webhook: `notify/discord_webhook.py`. The
+  URL lives in hub.db (`settings` table via `db/settings_repo.py`, key
+  `discord_webhook_url`), not in a mounted JSON. The per-channel bell is
+  the legacy `use_telegram` column (name kept to avoid a migration); the
+  worker reads it from the DB each time, and it is intentionally not a
+  supervisor restart trigger.
 - SQLite connections are per-call (`db.database.get_connection`). In
   `async` endpoints open them inside a `run_in_threadpool` function, never
   via the sync `get_db` dependency (different thread).

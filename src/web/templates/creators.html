@@ -34,7 +34,7 @@
       {% if c.raw_count %}<span class="pill pill-raw">{{ c.raw_count }} por convertir</span>{% endif %}
       {% if c.channel %}
         {% if not c.channel.enabled %}<span class="pill pill-muted">Pausado</span>{% endif %}
-        {% if c.channel.notify %}<span class="pill pill-muted" title="Avisos por Telegram activados">🔔</span>{% endif %}
+        {% if c.channel.notify %}<span class="pill pill-muted" title="Avisos por Discord activados">🔔</span>{% endif %}
       {% else %}
         <span class="pill pill-muted">No seguido</span>
       {% endif %}

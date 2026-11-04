@@ -12,7 +12,7 @@
       hx-target="closest tr"
       hx-swap="outerHTML"
       class="bell{% if channel.notify %} on{% endif %}"
-      title="{{ 'Avisos por Telegram activados' if channel.notify else 'Activar avisos por Telegram' }}">
+      title="{{ 'Avisos por Discord activados' if channel.notify else 'Activar avisos por Discord' }}">
       {{ "🔔" if channel.notify else "🔕" }}
     </button>
     <button

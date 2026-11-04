@@ -41,3 +41,10 @@ CREATE TABLE IF NOT EXISTS clip_marks (
 );
 
 CREATE INDEX IF NOT EXISTS idx_clip_marks_recording ON clip_marks(recording_id);
+
+-- Small key/value store for hub-wide settings that must survive container
+-- rebuilds (lives in hub.db under OUTPUT_DIR, unlike the mounted JSON files).
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);

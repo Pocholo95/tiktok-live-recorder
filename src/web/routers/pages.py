@@ -5,7 +5,8 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
-from db import channels_repo, clip_marks_repo, recordings_repo
+from db import channels_repo, clip_marks_repo, recordings_repo, settings_repo
+from db.database import get_connection
 from utils.enums import Mode
 from web.deps import get_db, get_supervisor, get_templates
 
@@ -351,10 +352,6 @@ def _settings_context(saved=None):
         if telegram.get("api_hash")
         else None,
         "chat_id": telegram.get("chat_id", ""),
-        "bot_token_status": _mask(telegram["bot_token"])
-        if telegram.get("bot_token")
-        else None,
-        "bot_chat_id": telegram.get("bot_chat_id", ""),
     }
 
 
@@ -363,13 +360,17 @@ def settings_page(
     request: Request, saved: str | None = None, templates=Depends(get_templates)
 ):
     return templates.TemplateResponse(
-        request, "settings.html", _settings_context(saved)
+        request,
+        "settings.html",
+        {**_settings_context(saved), **_discord_context(request)},
     )
 
 
 def _settings_error(request, templates, message):
     return templates.TemplateResponse(
-        request, "settings.html", {**_settings_context(), "error": message}
+        request,
+        "settings.html",
+        {**_settings_context(), **_discord_context(request), "error": message},
     )
 
 
@@ -443,48 +444,58 @@ def update_telegram(
     return RedirectResponse(url="/settings?saved=telegram", status_code=303)
 
 
-@router.post("/settings/telegram-bot", response_class=HTMLResponse)
-def update_telegram_bot(
+def _discord_context(request):
+    from notify import discord_webhook
+
+    conn = get_connection(request.app.state.db_path)
+    try:
+        url = settings_repo.get(conn, discord_webhook.SETTING_KEY)
+    finally:
+        conn.close()
+    return {"discord_status": _mask(url) if url else None}
+
+
+@router.post("/settings/discord", response_class=HTMLResponse)
+def update_discord(
     request: Request,
-    bot_token: str = Form(""),
-    bot_chat_id: str = Form(""),
+    webhook_url: str = Form(""),
+    clear: str = Form(""),
+    db=Depends(get_db),
     templates=Depends(get_templates),
 ):
-    from utils.utils import read_telegram_config, write_telegram_config
+    from notify import discord_webhook
 
-    try:
-        current = read_telegram_config()
-    except Exception:
-        current = {}
+    if clear:
+        settings_repo.set(db, discord_webhook.SETTING_KEY, None)
+        return RedirectResponse(url="/settings?saved=discord-cleared", status_code=303)
 
-    if bot_token.strip():
-        current["bot_token"] = bot_token.strip()
-    if bot_chat_id.strip():
-        current["bot_chat_id"] = bot_chat_id.strip()
+    webhook_url = webhook_url.strip()
+    if webhook_url:
+        if not discord_webhook.is_valid_url(webhook_url):
+            return _settings_error(
+                request,
+                templates,
+                "Esa URL no parece un webhook de Discord "
+                "(tiene que empezar con https://discord.com/api/webhooks/).",
+            )
+        settings_repo.set(db, discord_webhook.SETTING_KEY, webhook_url)
 
-    try:
-        write_telegram_config(current)
-    except OSError as e:
-        return _settings_error(
-            request,
-            templates,
-            f"No se pudo guardar telegram.json: {e}. "
-            "¿Está montado como volumen de solo lectura (:ro)?",
-        )
-
-    return RedirectResponse(url="/settings?saved=telegram-bot", status_code=303)
+    return RedirectResponse(url="/settings?saved=discord", status_code=303)
 
 
-@router.post("/settings/telegram-bot/test", response_class=HTMLResponse)
-def test_telegram_bot(request: Request, templates=Depends(get_templates)):
-    from notify import telegram_bot
+@router.post("/settings/discord/test", response_class=HTMLResponse)
+def test_discord(
+    request: Request, db=Depends(get_db), templates=Depends(get_templates)
+):
+    from notify import discord_webhook
 
-    error = telegram_bot.send_message(
-        "✅ Los avisos del <b>TikTok Live Recorder Hub</b> funcionan."
+    error = discord_webhook.send(
+        settings_repo.get(db, discord_webhook.SETTING_KEY),
+        discord_webhook.test_embed(),
     )
     if error:
         return _settings_error(request, templates, error)
-    return RedirectResponse(url="/settings?saved=telegram-test", status_code=303)
+    return RedirectResponse(url="/settings?saved=discord-test", status_code=303)
 
 
 @router.post("/channels/{channel_id}/notify", response_class=HTMLResponse)

@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 import supervisor.worker as worker_module  # noqa: E402
-from db import channels_repo, recordings_repo  # noqa: E402
+from db import channels_repo, recordings_repo, settings_repo  # noqa: E402
 from db.database import get_connection, init_db  # noqa: E402
 from supervisor.status import ChannelStatusStore  # noqa: E402
 from utils.enums import Mode  # noqa: E402
@@ -111,27 +111,27 @@ def test_worker_marks_recording_failed_on_remux_error(tmp_path, monkeypatch):
     assert status["detail"] == "remux failed"
 
 
-def test_worker_sends_telegram_notices_only_when_channel_opted_in(
-    tmp_path, monkeypatch
-):
+def test_worker_sends_discord_notices_only_when_channel_opted_in(tmp_path, monkeypatch):
     sent = []
     monkeypatch.setattr(worker_module, "TikTokRecorder", _FakeRecorder)
     monkeypatch.setattr(worker_module, "generate_thumbnail", lambda path, **kw: None)
     monkeypatch.setattr(worker_module, "read_cookies", lambda: {})
     monkeypatch.setattr(
-        worker_module.telegram_bot,
+        worker_module.discord_webhook,
         "live_started",
-        lambda user, rid: sent.append(("started", user)),
+        lambda url, user, rid: sent.append(("started", user, url)),
     )
     monkeypatch.setattr(
-        worker_module.telegram_bot,
+        worker_module.discord_webhook,
         "live_finished",
-        lambda user, rid, **kw: sent.append(("finished", user)),
+        lambda url, user, rid, **kw: sent.append(("finished", user, url)),
     )
 
     db_path = str(tmp_path / "hub.db")
     init_db(db_path)
     conn = get_connection(db_path)
+    url = "https://discord.com/api/webhooks/1/abc"
+    settings_repo.set(conn, "discord_webhook_url", url)
 
     for opted_in in (False, True):
         sent.clear()
@@ -144,5 +144,27 @@ def test_worker_sends_telegram_notices_only_when_channel_opted_in(
         worker.start()
         worker.join(timeout=2)
         name = row["username"]
-        expected = [("started", name), ("finished", name)] if opted_in else []
+        expected = [("started", name, url), ("finished", name, url)] if opted_in else []
         assert sent == expected
+
+
+def test_worker_skips_notices_without_webhook(tmp_path, monkeypatch):
+    sent = []
+    monkeypatch.setattr(worker_module, "TikTokRecorder", _FakeRecorder)
+    monkeypatch.setattr(worker_module, "generate_thumbnail", lambda path, **kw: None)
+    monkeypatch.setattr(worker_module, "read_cookies", lambda: {})
+    monkeypatch.setattr(
+        worker_module.discord_webhook, "live_started", lambda *a, **k: sent.append(a)
+    )
+
+    db_path = str(tmp_path / "hub.db")
+    init_db(db_path)
+    conn = get_connection(db_path)
+    row = _channel_row(conn, use_telegram=True)
+    worker = worker_module.Worker(
+        row, db_path, get_connection, tmp_path, ChannelStatusStore()
+    )
+    worker.start()
+    worker.join(timeout=2)
+
+    assert sent == []

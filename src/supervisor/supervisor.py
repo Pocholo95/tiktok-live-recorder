@@ -14,8 +14,9 @@ _TRACKED_FIELDS = (
     "mode",
     "automatic_interval",
     "proxy",
-    # use_telegram is deliberately absent: the worker reads it from the DB
-    # whenever it notifies, so toggling notices never interrupts a recording.
+    # use_telegram (the Discord notices bell) is deliberately absent: the
+    # worker reads it from the DB whenever it notifies, so toggling notices
+    # never interrupts a recording.
 )
 
 

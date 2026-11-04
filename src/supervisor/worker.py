@@ -3,8 +3,8 @@ import time
 from pathlib import Path
 
 from core.tiktok_recorder import TikTokRecorder
-from db import channels_repo, recordings_repo
-from notify import telegram_bot
+from db import channels_repo, recordings_repo, settings_repo
+from notify import discord_webhook
 from supervisor.thumbnails import generate_thumbnail
 from utils.enums import Mode
 from utils.logger_manager import logger
@@ -101,9 +101,10 @@ class Worker:
                     file_path=data["file_path"],
                     format="ts",
                 )
-                if self._notify_enabled(conn):
-                    telegram_bot.live_started(
-                        self._recording_user, self._current_recording_id
+                webhook = self._notify_webhook(conn)
+                if webhook:
+                    discord_webhook.live_started(
+                        webhook, self._recording_user, self._current_recording_id
                     )
                 self._status_store.set(
                     self.channel_id, phase="recording", detail=data.get("file_path")
@@ -117,11 +118,17 @@ class Worker:
         finally:
             conn.close()
 
-    def _notify_enabled(self, conn):
-        # Read live from the DB (not cached at construction) so toggling a
-        # channel's notices never needs a worker restart mid-recording.
+    def _notify_webhook(self, conn):
+        """
+        Discord webhook URL if this channel has notices on (its bell, stored
+        in the legacy `use_telegram` column), else None. Read live from the
+        DB, not cached at construction, so toggling it never needs a worker
+        restart mid-recording.
+        """
         row = channels_repo.get(conn, self.channel_id)
-        return bool(row and row["use_telegram"])
+        if not (row and row["use_telegram"]):
+            return None
+        return settings_repo.get(conn, discord_webhook.SETTING_KEY)
 
     def _finish_recording(self, conn, *, file_path, format="ts", **_ignored):
         duration_seconds = None
@@ -147,8 +154,10 @@ class Worker:
                 thumbnail_path=thumbnail_path,
             )
 
-        if self._notify_enabled(conn):
-            telegram_bot.live_finished(
+        webhook = self._notify_webhook(conn)
+        if webhook:
+            discord_webhook.live_finished(
+                webhook,
                 self._recording_user,
                 self._current_recording_id,
                 duration_seconds=duration_seconds,
@@ -165,9 +174,10 @@ class Worker:
                 conn, self._current_recording_id, error_message=error_message
             )
 
-        if self._notify_enabled(conn):
-            telegram_bot.live_failed(
-                self._recording_user, error_message, self._current_recording_id
+        webhook = self._notify_webhook(conn)
+        if webhook:
+            discord_webhook.live_failed(
+                webhook, self._recording_user, error_message, self._current_recording_id
             )
 
         self._current_recording_id = None

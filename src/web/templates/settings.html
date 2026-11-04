@@ -5,8 +5,9 @@
 
 {% if saved == "cookies" %}<p class="saved-banner">cookies.json actualizado.</p>{% endif %}
 {% if saved == "telegram" %}<p class="saved-banner">telegram.json actualizado.</p>{% endif %}
-{% if saved == "telegram-bot" %}<p class="saved-banner">Bot de Telegram guardado. Probalo con "Enviar aviso de prueba".</p>{% endif %}
-{% if saved == "telegram-test" %}<p class="saved-banner">Aviso de prueba enviado: revisá Telegram.</p>{% endif %}
+{% if saved == "discord" %}<p class="saved-banner">Webhook de Discord guardado. Probalo con "Enviar aviso de prueba".</p>{% endif %}
+{% if saved == "discord-cleared" %}<p class="saved-banner">Webhook de Discord quitado: no se van a mandar avisos.</p>{% endif %}
+{% if saved == "discord-test" %}<p class="saved-banner">Aviso de prueba enviado: revisá el canal de Discord.</p>{% endif %}
 {% if error %}<p class="error-banner">{{ error }}</p>{% endif %}
 
 <p class="warning">
@@ -29,26 +30,25 @@
   <button type="submit">Guardar cookies</button>
 </form>
 
-<h2>Avisos por Telegram</h2>
+<h2>Avisos por Discord</h2>
 <p class="hint settings-intro">
-  Te llega un mensaje cuando un canal entra en vivo y cuando termina el live.
-  Creá un bot con <strong>@BotFather</strong> (te da el token), mandale cualquier
-  mensaje a tu bot y poné tu chat_id (te lo dice <strong>@userinfobot</strong>).
-  Después activá la campana 🔔 de cada canal en el Dashboard.
+  Te llega un mensaje cuando un canal entra en vivo, cuando termina el live y si
+  falla la grabación. En Discord: <strong>Ajustes del servidor → Integraciones →
+  Webhooks → Nuevo webhook</strong>, elegí el canal y copiá la URL. Después activá
+  la campana 🔔 de cada canal en el Dashboard.
 </p>
-<form method="post" action="/settings/telegram-bot" class="settings-form">
+<form method="post" action="/settings/discord" class="settings-form">
   <label>
-    Token del bot
-    <span class="hint">{{ bot_token_status or "no configurado" }}</span>
-    <input type="password" name="bot_token" placeholder="dejar vacío para no cambiar" autocomplete="off">
-  </label>
-  <label>
-    Tu chat_id
-    <input type="text" name="bot_chat_id" value="{{ bot_chat_id }}" placeholder="ej. 123456789">
+    URL del webhook
+    <span class="hint">{{ ("configurado " ~ discord_status) if discord_status else "no configurado" }}</span>
+    <input type="password" name="webhook_url" placeholder="https://discord.com/api/webhooks/…" autocomplete="off">
   </label>
   <div class="form-actions">
-    <button type="submit">Guardar bot</button>
-    <button type="submit" formaction="/settings/telegram-bot/test" class="btn-secondary">Enviar aviso de prueba</button>
+    <button type="submit">Guardar webhook</button>
+    <button type="submit" formaction="/settings/discord/test" class="btn-secondary">Enviar aviso de prueba</button>
+    {% if discord_status %}
+    <button type="submit" name="clear" value="1" class="button-danger">Quitar</button>
+    {% endif %}
   </div>
 </form>
 

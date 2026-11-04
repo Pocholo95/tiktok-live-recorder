@@ -141,14 +141,14 @@ Browsers can't play `.ts`, so the library walks you through:
    only then replaces the raw file, which is deleted. The clip editor is
    enabled from then on.
 
-### Telegram live notices
+### Discord live notices
 
-Settings → *Avisos por Telegram*: paste a bot token from @BotFather and
-your chat id, then turn on the 🔔 bell of each channel on the dashboard.
-You get a message when the live starts and when it ends (duration, size).
-It uses the Bot API, so unlike the Telethon upload it needs no interactive
-login and works inside Docker. Set `HUB_PUBLIC_URL` to add an "open in the
-hub" link to each message.
+Settings → *Avisos por Discord*: paste a Discord webhook URL (Server
+settings → Integrations → Webhooks), then turn on the 🔔 bell of each
+channel on the dashboard. You get a message when the live starts, when it
+ends (duration, size) and if the recording fails. The URL is stored in
+`hub.db`, so it survives rebuilds without mounting anything extra. Set
+`HUB_PUBLIC_URL` to add an "open in the hub" link to each message.
 
 If you put the hub behind a reverse proxy, raise its upload size limit
 (e.g. nginx `client_max_body_size 0;`) - converted lives are large.
@@ -200,7 +200,7 @@ container can use. Recording is only a remux, so this rarely matters.
 | `HUB_HOST` | `0.0.0.0` | Interface the web server binds to. |
 | `HUB_PORT` | `8000` | Port the web server listens on. |
 | `HUB_RECONCILE_INTERVAL` | `5` | Seconds between checks for channel add/remove/edit. |
-| `HUB_PUBLIC_URL` | - | Base URL of the hub (e.g. `http://192.168.1.10:8000`) used for links in Telegram notices. |
+| `HUB_PUBLIC_URL` | - | Base URL of the hub (e.g. `http://192.168.1.10:8000`) used for links in Discord notices. |
 | `HUB_CPUS` | `1.5` | compose-only: CPU limit passed to `cpus:` (see above). |
 
 ## Command-Line Usage

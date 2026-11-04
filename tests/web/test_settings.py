@@ -112,3 +112,30 @@ def test_update_telegram_merges_fields(client, monkeypatch):
     assert written["api_id"] == 123
     assert written["api_hash"] == "hash"
     assert written["chat_id"] == -100987
+
+
+def test_discord_webhook_saved_validated_and_cleared(client, app):
+    from db import settings_repo
+    from db.database import get_connection
+
+    bad = client.post(
+        "/settings/discord", data={"webhook_url": "https://evil.example/x"}
+    )
+    assert "no parece un webhook" in bad.text
+
+    url = "https://discord.com/api/webhooks/1/abcdef"
+    ok = client.post(
+        "/settings/discord", data={"webhook_url": url}, follow_redirects=False
+    )
+    assert ok.status_code == 303
+    conn = get_connection(app.state.db_path)
+    assert settings_repo.get(conn, "discord_webhook_url") == url
+    assert "configurado ••••cdef" in client.get("/settings").text
+
+    client.post("/settings/discord", data={"clear": "1"})
+    assert settings_repo.get(conn, "discord_webhook_url") is None
+
+
+def test_discord_test_button_reports_missing_webhook(client):
+    response = client.post("/settings/discord/test")
+    assert "Falta configurar la URL del webhook" in response.text

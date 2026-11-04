@@ -145,3 +145,6 @@ hub.db-shm
 
 .idea/
 .vscode/
+
+# Local deployment config (copy from the *.example files)
+docker-compose.yml

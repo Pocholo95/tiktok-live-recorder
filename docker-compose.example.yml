@@ -15,7 +15,7 @@ services:
     # Caps how much CPU the container can use at once (recording conversion
     # is a real transcode, not a cheap remux, so it can peg every core it's
     # given). Override without editing this file: HUB_CPUS=3 docker compose
-    # up, or set it in a .env file next to this one.
+    # up, or set it in a .env file next to this one (see .env.example).
     cpus: "${HUB_CPUS:-1.5}"
     restart: unless-stopped
     # The flv->mp4 conversion on shutdown reads the whole recording, so

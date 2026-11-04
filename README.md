@@ -120,7 +120,13 @@ date, and cut/download clips from a recording (generated on the fly and
 streamed straight to the browser - nothing is written to disk; only the
 in/out times are saved server-side if you bookmark them).
 
+The repo ships `docker-compose.example.yml` and `.env.example` instead of
+the real files, so your own config never conflicts with `git pull`. Copy
+them once and edit your copies (both are git-ignored):
+
 ```bash
+cp docker-compose.example.yml docker-compose.yml
+cp .env.example .env
 docker compose up
 ```
 

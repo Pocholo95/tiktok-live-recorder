@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import avatar, state_pill %}
+{% block title %}@{{ username }} - TikTok Live Recorder Hub{% endblock %}
+{% block content %}
+<a class="back-link" href="/creators">← Creadores</a>
+
+<header class="creator-head">
+  {{ avatar(username, "lg") }}
+  <div class="creator-head-info">
+    <h1>@{{ username }}
+      {% if channel and channel.phase == "recording" %}<span class="pill pill-live">En vivo</span>{% endif %}
+    </h1>
+    <p class="muted">
+      {% if channel %}
+        {{ channel.phase_label }} · revisa cada {{ channel.automatic_interval }} min
+        {% if channel.notify %}· 🔔 avisos activados{% endif %}
+      {% else %}
+        No se está siguiendo este canal.
+      {% endif %}
+    </p>
+  </div>
+  <div class="creator-head-actions">
+    <a class="btn btn-ghost" href="https://www.tiktok.com/@{{ username }}" target="_blank" rel="noopener">Perfil en TikTok ↗</a>
+    {% if channel %}
+    <a class="btn" href="/library?channel_id={{ channel.id }}">Ver en la biblioteca</a>
+    {% endif %}
+  </div>
+</header>
+
+{% if summary %}
+<div class="stats">
+  <div class="stat"><span class="stat-value">{{ summary.total }}</span><span class="stat-label">lives grabados</span></div>
+  <div class="stat"><span class="stat-value">{{ summary.total_seconds | hours }}</span><span class="stat-label">de video en total</span></div>
+  <div class="stat"><span class="stat-value">{{ average_seconds | hhmmss }}</span><span class="stat-label">duración promedio</span></div>
+  <div class="stat"><span class="stat-value">{{ summary.last_started_at | ago }}</span><span class="stat-label">último live</span></div>
+  <div class="stat">
+    <span class="stat-value">{{ summary.total_bytes | filesize }}</span>
+    <span class="stat-label">en disco{% if summary.raw_count %} · <span class="text-raw">{{ summary.raw_count }} por convertir</span>{% endif %}</span>
+  </div>
+</div>
+
+<h2 class="section-title">Grabaciones</h2>
+<div class="rec-grid">
+  {% for r in recordings %}
+  <a class="rec-card" href="/library?recording_id={{ r.id }}{% if channel %}&channel_id={{ channel.id }}{% endif %}">
+    <div class="rec-card-thumb">
+      <img src="/media/{{ r.id }}/thumbnail" alt="" loading="lazy">
+      {% if r.duration_seconds %}<span class="rec-dur">{{ r.duration_seconds | hhmmss }}</span>{% endif %}
+      <span class="rec-card-pill">{{ state_pill(r) }}</span>
+    </div>
+    <div class="rec-card-info">
+      <strong title="{{ r.started_at }} UTC">{{ r.started_at | ago }}</strong>
+      <span class="muted">
+        {{ r.started_at[:10] }}
+        {% if r.file_size_bytes %}· {{ r.file_size_bytes | filesize }}{% endif %}
+        {% if r.clip_count %}· {{ r.clip_count }} clip{{ "s" if r.clip_count != 1 else "" }}{% endif %}
+      </span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="panel empty-state">
+  <h3>Todavía no hay grabaciones de @{{ username }}</h3>
+  <p class="muted">Cuando entre en vivo van a aparecer acá.</p>
+</div>
+{% endif %}
+{% endblock %}

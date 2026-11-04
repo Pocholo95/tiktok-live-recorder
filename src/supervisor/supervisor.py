@@ -14,8 +14,8 @@ _TRACKED_FIELDS = (
     "mode",
     "automatic_interval",
     "proxy",
-    "bitrate",
-    "use_telegram",
+    # use_telegram is deliberately absent: the worker reads it from the DB
+    # whenever it notifies, so toggling notices never interrupts a recording.
 )
 
 

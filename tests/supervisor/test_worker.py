@@ -109,3 +109,40 @@ def test_worker_marks_recording_failed_on_remux_error(tmp_path, monkeypatch):
     status = status_store.get(channel_row["id"])
     assert status["phase"] == "error"
     assert status["detail"] == "remux failed"
+
+
+def test_worker_sends_telegram_notices_only_when_channel_opted_in(
+    tmp_path, monkeypatch
+):
+    sent = []
+    monkeypatch.setattr(worker_module, "TikTokRecorder", _FakeRecorder)
+    monkeypatch.setattr(worker_module, "generate_thumbnail", lambda path, **kw: None)
+    monkeypatch.setattr(worker_module, "read_cookies", lambda: {})
+    monkeypatch.setattr(
+        worker_module.telegram_bot,
+        "live_started",
+        lambda user, rid: sent.append(("started", user)),
+    )
+    monkeypatch.setattr(
+        worker_module.telegram_bot,
+        "live_finished",
+        lambda user, rid, **kw: sent.append(("finished", user)),
+    )
+
+    db_path = str(tmp_path / "hub.db")
+    init_db(db_path)
+    conn = get_connection(db_path)
+
+    for opted_in in (False, True):
+        sent.clear()
+        row = _channel_row(
+            conn, username=f"creator{int(opted_in)}", use_telegram=opted_in
+        )
+        worker = worker_module.Worker(
+            row, db_path, get_connection, tmp_path, ChannelStatusStore()
+        )
+        worker.start()
+        worker.join(timeout=2)
+        name = row["username"]
+        expected = [("started", name), ("finished", name)] if opted_in else []
+        assert sent == expected

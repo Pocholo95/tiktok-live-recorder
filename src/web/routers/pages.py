@@ -1,7 +1,8 @@
+import shutil
 from pathlib import Path
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
 from db import channels_repo, clip_marks_repo, recordings_repo
@@ -31,8 +32,8 @@ def _channel_view(row, supervisor):
         "mode": Mode(row["mode"]).name.title(),
         "automatic_interval": row["automatic_interval"],
         "proxy": row["proxy"],
-        "bitrate": row["bitrate"],
         "enabled": bool(row["enabled"]),
+        "notify": bool(row["use_telegram"]),
         "phase": phase,
         "phase_label": _PHASE_LABELS.get(phase, phase),
         "detail": status.get("detail"),
@@ -120,6 +121,15 @@ def toggle_channel(
 def delete_channel(channel_id: int, db=Depends(get_db)):
     channels_repo.delete(db, channel_id)
     return PlainTextResponse("")
+
+
+def _disk_usage(request):
+    """Free/total bytes of the recordings volume, or None if unreadable."""
+    try:
+        usage = shutil.disk_usage(request.app.state.output_dir)
+    except OSError:
+        return None
+    return {"free": usage.free, "total": usage.total}
 
 
 def _parse_int(value):
@@ -245,6 +255,8 @@ def library(
             "no_clips_only": no_clips_only,
             "state": state,
             "counts": counts,
+            "totals": recordings_repo.totals(db),
+            "disk": _disk_usage(request),
             "state_tabs": state_tabs,
             "item_query": query(),
         },
@@ -339,6 +351,10 @@ def _settings_context(saved=None):
         if telegram.get("api_hash")
         else None,
         "chat_id": telegram.get("chat_id", ""),
+        "bot_token_status": _mask(telegram["bot_token"])
+        if telegram.get("bot_token")
+        else None,
+        "bot_chat_id": telegram.get("bot_chat_id", ""),
     }
 
 
@@ -425,3 +441,154 @@ def update_telegram(
         )
 
     return RedirectResponse(url="/settings?saved=telegram", status_code=303)
+
+
+@router.post("/settings/telegram-bot", response_class=HTMLResponse)
+def update_telegram_bot(
+    request: Request,
+    bot_token: str = Form(""),
+    bot_chat_id: str = Form(""),
+    templates=Depends(get_templates),
+):
+    from utils.utils import read_telegram_config, write_telegram_config
+
+    try:
+        current = read_telegram_config()
+    except Exception:
+        current = {}
+
+    if bot_token.strip():
+        current["bot_token"] = bot_token.strip()
+    if bot_chat_id.strip():
+        current["bot_chat_id"] = bot_chat_id.strip()
+
+    try:
+        write_telegram_config(current)
+    except OSError as e:
+        return _settings_error(
+            request,
+            templates,
+            f"No se pudo guardar telegram.json: {e}. "
+            "¿Está montado como volumen de solo lectura (:ro)?",
+        )
+
+    return RedirectResponse(url="/settings?saved=telegram-bot", status_code=303)
+
+
+@router.post("/settings/telegram-bot/test", response_class=HTMLResponse)
+def test_telegram_bot(request: Request, templates=Depends(get_templates)):
+    from notify import telegram_bot
+
+    error = telegram_bot.send_message(
+        "✅ Los avisos del <b>TikTok Live Recorder Hub</b> funcionan."
+    )
+    if error:
+        return _settings_error(request, templates, error)
+    return RedirectResponse(url="/settings?saved=telegram-test", status_code=303)
+
+
+@router.post("/channels/{channel_id}/notify", response_class=HTMLResponse)
+def toggle_channel_notify(
+    request: Request,
+    channel_id: int,
+    db=Depends(get_db),
+    supervisor=Depends(get_supervisor),
+    templates=Depends(get_templates),
+):
+    row = channels_repo.get(db, channel_id)
+    if row is not None:
+        channels_repo.update(db, channel_id, use_telegram=int(not row["use_telegram"]))
+        row = channels_repo.get(db, channel_id)
+
+    return templates.TemplateResponse(
+        request,
+        "partials/channel_row.html",
+        {"channel": _channel_view(row, supervisor)},
+    )
+
+
+def _creator_view(summary, channels_by_name, supervisor):
+    entry = dict(summary)
+    channel = channels_by_name.get(summary["username"])
+    entry["channel"] = _channel_view(channel, supervisor) if channel else None
+    return entry
+
+
+@router.get("/creators", response_class=HTMLResponse)
+def creators_index(
+    request: Request,
+    db=Depends(get_db),
+    supervisor=Depends(get_supervisor),
+    templates=Depends(get_templates),
+):
+    channels_by_name = {row["username"]: row for row in channels_repo.list_all(db)}
+    creators = [
+        _creator_view(s, channels_by_name, supervisor)
+        for s in recordings_repo.creator_summaries(db)
+    ]
+    # Channels that are tracked but haven't produced a recording yet still
+    # deserve a card, so the page doubles as an overview of everything.
+    seen = {c["username"] for c in creators}
+    for name, channel in channels_by_name.items():
+        if name not in seen:
+            creators.append(
+                {
+                    "username": name,
+                    "total": 0,
+                    "raw_count": 0,
+                    "live_count": 0,
+                    "total_seconds": 0,
+                    "total_bytes": 0,
+                    "last_started_at": None,
+                    "channel": _channel_view(channel, supervisor),
+                }
+            )
+    return templates.TemplateResponse(
+        request,
+        "creators.html",
+        {
+            "creators": creators,
+            "totals": recordings_repo.totals(db),
+            "disk": _disk_usage(request),
+        },
+    )
+
+
+@router.get("/creators/{username}", response_class=HTMLResponse)
+def creator_detail(
+    request: Request,
+    username: str,
+    db=Depends(get_db),
+    supervisor=Depends(get_supervisor),
+    templates=Depends(get_templates),
+):
+    username = username.lstrip("@")
+    channels_by_name = {row["username"]: row for row in channels_repo.list_all(db)}
+    summaries = recordings_repo.creator_summaries(db, username)
+    if not summaries and username not in channels_by_name:
+        raise HTTPException(status_code=404, detail="Creador no encontrado")
+
+    channel = channels_by_name.get(username)
+    summary = dict(summaries[0]) if summaries else None
+    recordings = [dict(r) for r in recordings_repo.list_for_username(db, username)]
+    counts = clip_marks_repo.count_for_recordings(db, [r["id"] for r in recordings])
+    for r in recordings:
+        r["clip_count"] = counts.get(r["id"], 0)
+
+    completed = [r for r in recordings if r["duration_seconds"]]
+    average_seconds = (
+        sum(r["duration_seconds"] for r in completed) / len(completed)
+        if completed
+        else 0
+    )
+    return templates.TemplateResponse(
+        request,
+        "creator.html",
+        {
+            "username": username,
+            "summary": summary,
+            "channel": _channel_view(channel, supervisor) if channel else None,
+            "recordings": recordings,
+            "average_seconds": average_seconds,
+        },
+    )

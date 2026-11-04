@@ -8,10 +8,12 @@
   <script src="/static/htmx.min.js"></script>
 </head>
 <body>
+  {% set path = request.url.path %}
   <nav class="nav">
-    <a href="/">Dashboard</a>
-    <a href="/library">Library</a>
-    <a href="/settings">Settings</a>
+    <a href="/" class="{{ 'active' if path == '/' }}">Dashboard</a>
+    <a href="/library" class="{{ 'active' if path.startswith('/library') }}">Biblioteca</a>
+    <a href="/creators" class="{{ 'active' if path.startswith('/creators') }}">Creadores</a>
+    <a href="/settings" class="{{ 'active' if path.startswith('/settings') }}">Ajustes</a>
   </nav>
   <main class="container">
     {% block content %}{% endblock %}

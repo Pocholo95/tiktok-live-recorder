@@ -9,3 +9,34 @@
     <span class="pill pill-raw">Por convertir</span>
   {%- endif -%}
 {%- endmacro %}
+
+{% macro avatar(username, size="md") -%}
+  <span class="avatar avatar-{{ size }}" style="--hue: {{ username | hue }}" aria-hidden="true">{{ username[:1] | upper }}</span>
+{%- endmacro %}
+
+{% macro stat_tiles(totals, disk) -%}
+<div class="stats">
+  <div class="stat">
+    <span class="stat-value">{{ totals.total }}</span>
+    <span class="stat-label">lives grabados</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value">{{ totals.total_seconds | hours }}</span>
+    <span class="stat-label">de video</span>
+  </div>
+  <div class="stat">
+    <span class="stat-value">{{ totals.total_bytes | filesize }}</span>
+    <span class="stat-label">
+      en disco{% if totals.raw_bytes %} · <span class="text-raw">{{ totals.raw_bytes | filesize }} crudo</span>{% endif %}
+    </span>
+  </div>
+  {% if disk %}
+  {% set used_pct = ((disk.total - disk.free) / disk.total * 100) | round | int %}
+  <div class="stat">
+    <span class="stat-value">{{ disk.free | filesize }}</span>
+    <span class="stat-label">libres en el volumen</span>
+    <span class="meter" title="{{ used_pct }}% usado"><span class="meter-fill{% if used_pct >= 90 %} is-danger{% elif used_pct >= 75 %} is-warn{% endif %}" style="width: {{ used_pct }}%"></span></span>
+  </div>
+  {% endif %}
+</div>
+{%- endmacro %}

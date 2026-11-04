@@ -5,7 +5,14 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from web.formatting import basename, format_bytes, format_hms
+from web.formatting import (
+    avatar_hue,
+    basename,
+    format_bytes,
+    format_hms,
+    format_hours,
+    time_ago,
+)
 from web.routers import media, pages
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
@@ -35,6 +42,9 @@ def create_app(db_path, supervisor, output_dir):
     app.state.templates.env.filters["hhmmss"] = format_hms
     app.state.templates.env.filters["filesize"] = format_bytes
     app.state.templates.env.filters["basename"] = basename
+    app.state.templates.env.filters["ago"] = time_ago
+    app.state.templates.env.filters["hours"] = format_hours
+    app.state.templates.env.filters["hue"] = avatar_hue
 
     app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 

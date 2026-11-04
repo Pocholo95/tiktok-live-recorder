@@ -3,7 +3,8 @@ import time
 from pathlib import Path
 
 from core.tiktok_recorder import TikTokRecorder
-from db import recordings_repo
+from db import channels_repo, recordings_repo
+from notify import telegram_bot
 from supervisor.thumbnails import generate_thumbnail
 from utils.enums import Mode
 from utils.logger_manager import logger
@@ -22,6 +23,7 @@ class Worker:
     def __init__(self, channel_row, db_path, get_connection, output_dir, status_store):
         self.channel_id = channel_row["id"]
         self.username = channel_row["username"]
+        self._recording_user = self.username
 
         self._db_path = db_path
         self._get_connection = get_connection
@@ -91,13 +93,18 @@ class Worker:
         try:
             if phase == "recording_started":
                 self._recording_started_at = time.time()
+                self._recording_user = data.get("user", self.username)
                 self._current_recording_id = recordings_repo.start(
                     conn,
                     channel_id=self.channel_id,
-                    username=data.get("user", self.username),
+                    username=self._recording_user,
                     file_path=data["file_path"],
                     format="ts",
                 )
+                if self._notify_enabled(conn):
+                    telegram_bot.live_started(
+                        self._recording_user, self._current_recording_id
+                    )
                 self._status_store.set(
                     self.channel_id, phase="recording", detail=data.get("file_path")
                 )
@@ -109,6 +116,12 @@ class Worker:
                 self._fail_recording(conn, data.get("error", "unknown error"))
         finally:
             conn.close()
+
+    def _notify_enabled(self, conn):
+        # Read live from the DB (not cached at construction) so toggling a
+        # channel's notices never needs a worker restart mid-recording.
+        row = channels_repo.get(conn, self.channel_id)
+        return bool(row and row["use_telegram"])
 
     def _finish_recording(self, conn, *, file_path, format="ts", **_ignored):
         duration_seconds = None
@@ -134,6 +147,14 @@ class Worker:
                 thumbnail_path=thumbnail_path,
             )
 
+        if self._notify_enabled(conn):
+            telegram_bot.live_finished(
+                self._recording_user,
+                self._current_recording_id,
+                duration_seconds=duration_seconds,
+                size_bytes=file_size_bytes,
+            )
+
         self._current_recording_id = None
         self._recording_started_at = None
         self._status_store.set(self.channel_id, phase="idle")
@@ -142,6 +163,11 @@ class Worker:
         if self._current_recording_id is not None:
             recordings_repo.mark_failed(
                 conn, self._current_recording_id, error_message=error_message
+            )
+
+        if self._notify_enabled(conn):
+            telegram_bot.live_failed(
+                self._recording_user, error_message, self._current_recording_id
             )
 
         self._current_recording_id = None

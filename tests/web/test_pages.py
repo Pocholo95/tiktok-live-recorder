@@ -334,3 +334,47 @@ def test_library_mp4_recording_shows_clip_editor(client, app):
 
     assert 'id="clip-video"' in text
     assert 'id="convert-workflow"' not in text
+
+
+def test_creators_index_lists_creators_with_stats(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    channels_repo.insert(conn, username="newbie", mode=Mode.AUTOMATIC)
+    rid = _completed(conn, channel_id, "/output/a.ts", "ts")
+    conn.execute("UPDATE recordings SET duration_seconds = 7200 WHERE id = ?", (rid,))
+    conn.commit()
+
+    text = client.get("/creators").text
+
+    assert 'href="/creators/creator"' in text
+    assert "2,0 h" in text
+    assert "1 por convertir" in text
+    # Tracked channels without recordings still get a card.
+    assert 'href="/creators/newbie"' in text
+
+
+def test_creator_detail_shows_recordings(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    rid = _completed(conn, channel_id, "/output/a.mp4", "mp4")
+
+    response = client.get("/creators/@creator")
+
+    assert response.status_code == 200
+    assert f"recording_id={rid}" in response.text
+    assert "https://www.tiktok.com/@creator" in response.text
+
+
+def test_creator_detail_404_for_unknown(client):
+    assert client.get("/creators/nobody").status_code == 404
+
+
+def test_toggle_channel_notify(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+
+    response = client.post(f"/channels/{channel_id}/notify")
+
+    assert response.status_code == 200
+    assert channels_repo.get(conn, channel_id)["use_telegram"] == 1
+    assert "bell on" in response.text

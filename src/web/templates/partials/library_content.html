@@ -1,13 +1,7 @@
-{% from "partials/macros.html" import state_pill %}
+{% from "partials/macros.html" import state_pill, stat_tiles %}
 <div id="library-content" class="library">
   <header class="lib-head">
-    <div>
-      <h1>Biblioteca</h1>
-      <p class="lib-sub">
-        {{ counts.all }} grabación{{ "es" if counts.all != 1 else "" }}
-        {% if counts.raw %}· <strong class="text-raw">{{ counts.raw }} por convertir</strong> ({{ counts.raw_bytes | filesize }} en crudo){% endif %}
-      </p>
-    </div>
+    <h1>Biblioteca</h1>
     <nav class="seg" aria-label="Estado">
       {% for tab in state_tabs %}
       <a
@@ -22,6 +16,8 @@
       {% endfor %}
     </nav>
   </header>
+
+  {{ stat_tiles(totals, disk) }}
 
   <div class="library-layout">
     <aside class="library-sidebar">
@@ -74,7 +70,7 @@
               {{ state_pill(recording) }}
             </div>
             <div class="rec-meta">
-              {{ recording.started_at[11:16] }}
+              <span title="{{ recording.started_at }} UTC">{{ recording.started_at | ago }}</span>
               {% if recording.file_size_bytes %}· {{ recording.file_size_bytes | filesize }}{% endif %}
               {% if recording.clip_count %}· {{ recording.clip_count }} clip{{ "s" if recording.clip_count != 1 else "" }}{% endif %}
             </div>

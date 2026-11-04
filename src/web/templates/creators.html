@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import avatar, stat_tiles %}
+{% block title %}Creadores - TikTok Live Recorder Hub{% endblock %}
+{% block content %}
+<header class="lib-head">
+  <h1>Creadores</h1>
+  <span class="muted">{{ creators | length }} creador{{ "es" if creators | length != 1 else "" }}</span>
+</header>
+
+{{ stat_tiles(totals, disk) }}
+
+{% if creators %}
+<div class="creator-grid">
+  {% for c in creators %}
+  {% set live = c.live_count or (c.channel and c.channel.phase == "recording") %}
+  <a class="creator-card{% if live %} is-live{% endif %}" href="/creators/{{ c.username }}">
+    <div class="creator-card-top">
+      {{ avatar(c.username) }}
+      <div class="creator-card-name">
+        <strong>@{{ c.username }}</strong>
+        <span class="muted">
+          {% if live %}<span class="pill pill-live">En vivo</span>
+          {% elif c.last_started_at %}último live {{ c.last_started_at | ago }}
+          {% else %}sin grabaciones todavía{% endif %}
+        </span>
+      </div>
+    </div>
+    <dl class="creator-card-stats">
+      <div><dt>Lives</dt><dd>{{ c.total }}</dd></div>
+      <div><dt>Video</dt><dd>{{ c.total_seconds | hours }}</dd></div>
+      <div><dt>Disco</dt><dd>{{ c.total_bytes | filesize if c.total_bytes else "-" }}</dd></div>
+    </dl>
+    <div class="creator-card-foot">
+      {% if c.raw_count %}<span class="pill pill-raw">{{ c.raw_count }} por convertir</span>{% endif %}
+      {% if c.channel %}
+        {% if not c.channel.enabled %}<span class="pill pill-muted">Pausado</span>{% endif %}
+        {% if c.channel.notify %}<span class="pill pill-muted" title="Avisos por Telegram activados">🔔</span>{% endif %}
+      {% else %}
+        <span class="pill pill-muted">No seguido</span>
+      {% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="panel empty-state">
+  <h3>Todavía no hay creadores</h3>
+  <p class="muted">Agregá un canal en el <a href="/">Dashboard</a>.</p>
+</div>
+{% endif %}
+{% endblock %}

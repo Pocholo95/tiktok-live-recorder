@@ -131,3 +131,39 @@ def replace_with_converted(
         (file_path, file_size_bytes, duration_seconds, thumbnail_path, recording_id),
     )
     conn.commit()
+
+
+_SUMMARY_COLUMNS = f"""
+    COUNT(*) AS total,
+    SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,
+    SUM(CASE WHEN {_STATE_FILTERS["raw"]} THEN 1 ELSE 0 END) AS raw_count,
+    SUM(CASE WHEN status = 'recording' THEN 1 ELSE 0 END) AS live_count,
+    COALESCE(SUM(duration_seconds), 0) AS total_seconds,
+    COALESCE(SUM(file_size_bytes), 0) AS total_bytes,
+    COALESCE(SUM(CASE WHEN {_STATE_FILTERS["raw"]} THEN file_size_bytes END), 0)
+        AS raw_bytes,
+    MAX(started_at) AS last_started_at
+"""
+
+
+def totals(conn):
+    """Library-wide numbers for the stats header."""
+    return conn.execute(f"SELECT {_SUMMARY_COLUMNS} FROM recordings").fetchone()
+
+
+def creator_summaries(conn, username=None):
+    """Per-username stats (all creators, or just `username`), newest first."""
+    query = f"SELECT username, {_SUMMARY_COLUMNS} FROM recordings"
+    params = []
+    if username is not None:
+        query += " WHERE username = ?"
+        params.append(username)
+    query += " GROUP BY username ORDER BY last_started_at DESC"
+    return conn.execute(query, params).fetchall()
+
+
+def list_for_username(conn, username):
+    return conn.execute(
+        "SELECT * FROM recordings WHERE username = ? ORDER BY started_at DESC",
+        (username,),
+    ).fetchall()

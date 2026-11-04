@@ -5,6 +5,8 @@
 
 {% if saved == "cookies" %}<p class="saved-banner">cookies.json actualizado.</p>{% endif %}
 {% if saved == "telegram" %}<p class="saved-banner">telegram.json actualizado.</p>{% endif %}
+{% if saved == "telegram-bot" %}<p class="saved-banner">Bot de Telegram guardado. Probalo con "Enviar aviso de prueba".</p>{% endif %}
+{% if saved == "telegram-test" %}<p class="saved-banner">Aviso de prueba enviado: revisá Telegram.</p>{% endif %}
 {% if error %}<p class="error-banner">{{ error }}</p>{% endif %}
 
 <p class="warning">
@@ -27,7 +29,31 @@
   <button type="submit">Guardar cookies</button>
 </form>
 
-<h2>Telegram (opcional)</h2>
+<h2>Avisos por Telegram</h2>
+<p class="hint settings-intro">
+  Te llega un mensaje cuando un canal entra en vivo y cuando termina el live.
+  Creá un bot con <strong>@BotFather</strong> (te da el token), mandale cualquier
+  mensaje a tu bot y poné tu chat_id (te lo dice <strong>@userinfobot</strong>).
+  Después activá la campana 🔔 de cada canal en el Dashboard.
+</p>
+<form method="post" action="/settings/telegram-bot" class="settings-form">
+  <label>
+    Token del bot
+    <span class="hint">{{ bot_token_status or "no configurado" }}</span>
+    <input type="password" name="bot_token" placeholder="dejar vacío para no cambiar" autocomplete="off">
+  </label>
+  <label>
+    Tu chat_id
+    <input type="text" name="bot_chat_id" value="{{ bot_chat_id }}" placeholder="ej. 123456789">
+  </label>
+  <div class="form-actions">
+    <button type="submit">Guardar bot</button>
+    <button type="submit" formaction="/settings/telegram-bot/test" class="btn-secondary">Enviar aviso de prueba</button>
+  </div>
+</form>
+
+<details class="settings-legacy">
+  <summary>Cuenta de Telegram (Telethon, para subir videos desde el CLI)</summary>
 <form method="post" action="/settings/telegram" class="settings-form">
   <label>
     api_id
@@ -45,4 +71,5 @@
   </label>
   <button type="submit">Guardar Telegram</button>
 </form>
+</details>
 {% endblock %}

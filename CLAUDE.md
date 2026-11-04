@@ -57,6 +57,14 @@ copies of the `*.example` files.
   recording click, `HX-Target: library-main`) so the sidebar keeps its
   scroll position. Library states: raw / ready (mp4) / recording / failed
   (`recordings_repo._STATE_FILTERS`).
+- `/creators` and `/creators/{username}` aggregate by `recordings.username`
+  (`recordings_repo.creator_summaries`), so creators whose channel was
+  deleted still show up. Timestamps in the DB are UTC (`datetime('now')`);
+  the `ago` filter renders relative times.
+- Telegram notices: `notify/telegram_bot.py` (Bot API, `bot_token` /
+  `bot_chat_id` in telegram.json). The per-channel switch is the old
+  `use_telegram` column; the worker reads it from the DB each time, and it
+  is intentionally not a supervisor restart trigger.
 - SQLite connections are per-call (`db.database.get_connection`). In
   `async` endpoints open them inside a `run_in_threadpool` function, never
   via the sync `get_db` dependency (different thread).

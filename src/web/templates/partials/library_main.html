@@ -4,9 +4,9 @@
   {% set r = selected_recording %}
   <header class="rec-head">
     <div class="rec-head-title">
-      <h2>@{{ r.username }} {{ state_pill(r) }}</h2>
+      <h2><a class="creator-link" href="/creators/{{ r.username }}">@{{ r.username }}</a> {{ state_pill(r) }}</h2>
       <p class="rec-head-meta">
-        <span>{{ r.started_at[:10] }} · {{ r.started_at[11:16] }}</span>
+        <span title="{{ r.started_at }} UTC">{{ r.started_at | ago }}</span>
         {% if r.duration_seconds %}<span>{{ r.duration_seconds | hhmmss }}</span>{% endif %}
         {% if r.file_size_bytes %}<span>{{ r.file_size_bytes | filesize }}</span>{% endif %}
         <span class="mono">.{{ r.format }}</span>
@@ -24,7 +24,7 @@
   <section class="panel state-panel">
     <img class="state-thumb" src="/media/{{ r.id }}/thumbnail" alt="">
     <div>
-      <h3><span class="live-dot"></span> Grabando ahora</h3>
+      <h3><span class="live-dot"></span> Grabando ahora · empezó {{ r.started_at | ago }}</h3>
       <p class="muted">Cuando el live termine vas a poder descargar el crudo y convertirlo.</p>
     </div>
   </section>

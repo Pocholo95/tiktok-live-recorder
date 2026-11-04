@@ -5,7 +5,7 @@ import time
 class ChannelStatusStore:
     """
     Thread-safe in-memory status board. Worker threads write to it as they
-    move through phases (recording/converting/idle/error), and the web
+    move through phases (recording/idle/error), and the web
     layer polls it to render live status without touching the DB or
     parsing logs.
     """

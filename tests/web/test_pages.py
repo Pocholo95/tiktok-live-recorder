@@ -163,7 +163,7 @@ def test_library_shows_selected_recording(client, app):
 
     assert response.status_code == 200
     assert "creator" in response.text
-    assert "Eliminar grabación" in response.text
+    assert "data-delete-recording" in response.text
 
 
 def test_library_htmx_request_returns_partial_without_page_chrome(client, app):
@@ -181,7 +181,7 @@ def test_library_htmx_request_returns_partial_without_page_chrome(client, app):
     )
 
     assert response.status_code == 200
-    assert "Eliminar grabación" in response.text
+    assert "data-delete-recording" in response.text
     # A partial swap must not nest the page chrome inside itself.
     assert "<html" not in response.text
     assert 'class="nav"' not in response.text
@@ -204,12 +204,12 @@ def test_library_recording_click_only_swaps_the_player_panel(client, app):
     )
 
     assert response.status_code == 200
-    assert "Eliminar grabación" in response.text
+    assert "data-delete-recording" in response.text
     assert 'id="library-main"' in response.text
     # Selecting a recording must not re-render the sidebar - that would
     # reset its scroll position on every click.
     assert 'class="library-sidebar"' not in response.text
-    assert "recording-list-item" not in response.text
+    assert "rec-item" not in response.text
 
 
 def test_library_defaults_to_most_recent_recording_when_none_selected(client, app):
@@ -225,7 +225,7 @@ def test_library_defaults_to_most_recent_recording_when_none_selected(client, ap
     response = client.get("/library")
 
     assert response.status_code == 200
-    assert "Eliminar grabación" in response.text
+    assert "data-delete-recording" in response.text
 
 
 def test_old_clip_route_redirects_to_library(client, app):
@@ -281,3 +281,56 @@ def test_create_clip_mark_rejects_invalid_range(client, app):
 
     assert clip_marks_repo.list_for_recording(conn, recording_id) == []
     assert "No se guardó" in response.text  # failure is visible, not silent
+
+
+def _completed(conn, channel_id, file_path, format):
+    recording_id = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path=file_path
+    )
+    recordings_repo.mark_completed(
+        conn, recording_id, file_path=file_path, format=format
+    )
+    return recording_id
+
+
+def test_library_state_tabs_filter_raw_and_ready(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    raw_id = _completed(conn, channel_id, "/output/raw.ts", "ts")
+    ready_id = _completed(conn, channel_id, "/output/ready.mp4", "mp4")
+
+    raw = client.get("/library?state=raw").text
+    assert f'data-recording-id="{raw_id}"' in raw
+    assert f'data-recording-id="{ready_id}"' not in raw
+
+    ready = client.get("/library?state=ready").text
+    assert f'data-recording-id="{ready_id}"' in ready
+    assert f'data-recording-id="{raw_id}"' not in ready
+
+    # Unknown states fall back to showing everything.
+    everything = client.get("/library?state=bogus").text
+    assert f'data-recording-id="{raw_id}"' in everything
+    assert f'data-recording-id="{ready_id}"' in everything
+
+
+def test_library_raw_recording_shows_conversion_workflow(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    raw_id = _completed(conn, channel_id, "/output/TK_creator_x.ts", "ts")
+
+    text = client.get(f"/library?recording_id={raw_id}").text
+
+    assert 'id="convert-workflow"' in text
+    assert 'data-raw-name="TK_creator_x.ts"' in text
+    assert 'id="clip-video"' not in text
+
+
+def test_library_mp4_recording_shows_clip_editor(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    ready_id = _completed(conn, channel_id, "/output/a.mp4", "mp4")
+
+    text = client.get(f"/library?recording_id={ready_id}").text
+
+    assert 'id="clip-video"' in text
+    assert 'id="convert-workflow"' not in text

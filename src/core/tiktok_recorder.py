@@ -5,12 +5,12 @@ from threading import Thread
 
 from requests import RequestException
 
+from core.flv_stream import TsRemuxer
 from core.tiktok_api import TikTokAPI
+from utils.custom_exceptions import LiveNotFound, TikTokRecorderError, UserLiveError
+from utils.enums import Error, Mode, TikTokError, TimeOut
 from utils.logger_manager import logger
 from utils.recorder_config import RecorderConfig
-from utils.video_management import VideoManagement
-from utils.custom_exceptions import LiveNotFound, UserLiveError, TikTokRecorderError
-from utils.enums import Mode, Error, TimeOut, TikTokError
 
 
 class TikTokRecorder:
@@ -195,7 +195,7 @@ class TikTokRecorder:
 
     def _build_output_path(self, user: str) -> str:
         filename = (
-            f"TK_{user}_{time.strftime('%Y.%m.%d_%H-%M-%S', time.localtime())}_flv.flv"
+            f"TK_{user}_{time.strftime('%Y.%m.%d_%H-%M-%S', time.localtime())}.ts"
         )
         if self.output:
             return str(Path(self.output) / filename)
@@ -222,12 +222,16 @@ class TikTokRecorder:
             else:
                 logger.info(f"Started recording (stream {index}/{len(live_urls)})...")
 
-            buffer_size = 512 * 1024  # 512 KB buffer
-            buffer = bytearray()
             bytes_written = 0
+            connections = 0
 
             logger.info("[PRESS CTRL + C ONCE TO STOP]")
-            with open(output, "wb") as out_file:
+            # Raw FLV is never written to disk: it's normalized (reconnects
+            # and resolution changes spliced into one timeline) and remuxed
+            # to MPEG-TS on the fly - see core/flv_stream.py. No transcode
+            # happens on this machine; the MP4 is made offline on a GPU.
+            remuxer = TsRemuxer(output, ffmpeg_path=self.ffmpeg_path)
+            try:
                 stop_recording = False
                 stream_ended = False
                 while not stop_recording:
@@ -240,16 +244,23 @@ class TikTokRecorder:
                             logger.info("Stop requested. Stopping recording.")
                             break
 
+                        if connections:
+                            logger.info("Stream connection dropped, reconnecting...")
+                            remuxer.new_connection()
+                        connections += 1
+
                         start_time = time.time()
                         for chunk in self.tiktok.download_live_stream(live_url):
-                            buffer.extend(chunk)
+                            remuxer.write(chunk)
                             bytes_written += len(chunk)
-                            if len(buffer) >= buffer_size:
-                                out_file.write(buffer)
-                                buffer.clear()
 
                             elapsed_time = time.time() - start_time
                             if self.duration and elapsed_time >= self.duration:
+                                stop_recording = True
+                                break
+
+                            if self._stopped():
+                                logger.info("Stop requested. Stopping recording.")
                                 stop_recording = True
                                 break
                         else:
@@ -277,16 +288,15 @@ class TikTokRecorder:
                             exc_info=True,
                         )
                         stop_recording = True
-
-                    finally:
-                        if buffer:
-                            out_file.write(buffer)
-                            buffer.clear()
-                        out_file.flush()
+            finally:
+                remuxer.close()
 
             if bytes_written >= min_stream_bytes:
                 break
 
+            # The remuxer appends, so a dud candidate's few bytes must not
+            # end up in front of the next candidate's stream.
+            Path(output).unlink(missing_ok=True)
             logger.warning(
                 f"Stream {index}/{len(live_urls)} returned only {bytes_written} bytes. "
                 "Trying another CDN/quality..."
@@ -296,21 +306,7 @@ class TikTokRecorder:
             raise LiveNotFound(TikTokError.RETRIEVE_LIVE_URL)
 
         logger.info(f"Recording finished: {Path(output).resolve()}\n")
-        self._on_status("converting", user=user, file_path=output)
-        final_path = VideoManagement.convert_flv_to_mp4(
-            output, self.bitrate, self.ffmpeg_path
-        )
-        if final_path:
-            self._on_status(
-                "recording_finished", user=user, file_path=final_path, format="mp4"
-            )
-        else:
-            self._on_status(
-                "recording_error",
-                user=user,
-                file_path=output,
-                error="flv-to-mp4 conversion failed",
-            )
+        self._on_status("recording_finished", user=user, file_path=output, format="ts")
 
     def check_country_blacklisted(self):
         is_blacklisted = self.tiktok.is_country_blacklisted()

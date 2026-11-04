@@ -94,7 +94,7 @@ def parse_args():
     parser.add_argument(
         "-bitrate",
         dest="bitrate",
-        help="Specify the bitrate for the output file (e.g. 1000k, 1M). Default: None (keep original)",
+        help="Deprecated, has no effect: recordings are saved as raw .ts and converted offline.",
         action="store",
     )
 

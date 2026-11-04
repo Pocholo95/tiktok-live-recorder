@@ -56,9 +56,23 @@ def mark_failed(conn, recording_id, *, error_message):
     conn.commit()
 
 
-def list_filtered(conn, *, channel_id=None, date_from=None, date_to=None):
+# A recording is "ready" once the offline-converted MP4 has been uploaded
+# back; anything else that finished is still the raw capture (.ts, or .flv
+# from before the recorder wrote TS) waiting to be converted.
+_STATE_FILTERS = {
+    "raw": "status = 'completed' AND format != 'mp4'",
+    "ready": "status = 'completed' AND format = 'mp4'",
+    "recording": "status = 'recording'",
+    "failed": "status = 'failed'",
+}
+
+
+def list_filtered(conn, *, channel_id=None, date_from=None, date_to=None, state=None):
     query = "SELECT * FROM recordings WHERE 1=1"
     params = []
+
+    if state in _STATE_FILTERS:
+        query += f" AND {_STATE_FILTERS[state]}"
 
     if channel_id is not None:
         query += " AND channel_id = ?"
@@ -82,4 +96,38 @@ def get(conn, recording_id):
 
 def delete(conn, recording_id):
     conn.execute("DELETE FROM recordings WHERE id = ?", (recording_id,))
+    conn.commit()
+
+
+def state_counts(conn):
+    """How many recordings are in each library state (see _STATE_FILTERS)."""
+    counts = {}
+    for state, condition in _STATE_FILTERS.items():
+        counts[state] = conn.execute(
+            f"SELECT COUNT(*) FROM recordings WHERE {condition}"
+        ).fetchone()[0]
+    counts["all"] = conn.execute("SELECT COUNT(*) FROM recordings").fetchone()[0]
+    counts["raw_bytes"] = conn.execute(
+        "SELECT COALESCE(SUM(file_size_bytes), 0) FROM recordings "
+        f"WHERE {_STATE_FILTERS['raw']}"
+    ).fetchone()[0]
+    return counts
+
+
+def replace_with_converted(
+    conn, recording_id, *, file_path, file_size_bytes, duration_seconds, thumbnail_path
+):
+    """Point a raw recording at its uploaded MP4 (the raw file is deleted by the caller)."""
+    conn.execute(
+        """
+        UPDATE recordings
+        SET file_path = ?,
+            format = 'mp4',
+            file_size_bytes = ?,
+            duration_seconds = COALESCE(?, duration_seconds),
+            thumbnail_path = COALESCE(?, thumbnail_path)
+        WHERE id = ?
+        """,
+        (file_path, file_size_bytes, duration_seconds, thumbnail_path, recording_id),
+    )
     conn.commit()

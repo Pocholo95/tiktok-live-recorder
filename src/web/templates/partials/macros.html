@@ -1,0 +1,11 @@
+{% macro state_pill(recording) -%}
+  {%- if recording.status == "recording" -%}
+    <span class="pill pill-live">Grabando</span>
+  {%- elif recording.status == "failed" -%}
+    <span class="pill pill-failed">Falló</span>
+  {%- elif recording.format == "mp4" -%}
+    <span class="pill pill-ready">MP4</span>
+  {%- else -%}
+    <span class="pill pill-raw">Por convertir</span>
+  {%- endif -%}
+{%- endmacro %}

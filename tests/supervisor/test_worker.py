@@ -22,16 +22,13 @@ class _FakeRecorder:
         on_status(
             "recording_started",
             user=self.config.user,
-            file_path="/output/TK_creator_flv.flv",
-        )
-        on_status(
-            "converting", user=self.config.user, file_path="/output/TK_creator.mp4"
+            file_path="/output/TK_creator.ts",
         )
         on_status(
             "recording_finished",
             user=self.config.user,
-            file_path="/output/TK_creator.mp4",
-            format="mp4",
+            file_path="/output/TK_creator.ts",
+            format="ts",
         )
 
 
@@ -69,8 +66,8 @@ def test_worker_writes_completed_recording_on_success(tmp_path, monkeypatch):
     recordings = recordings_repo.list_filtered(conn, channel_id=channel_row["id"])
     assert len(recordings) == 1
     assert recordings[0]["status"] == "completed"
-    assert recordings[0]["format"] == "mp4"
-    assert recordings[0]["file_path"] == "/output/TK_creator.mp4"
+    assert recordings[0]["format"] == "ts"
+    assert recordings[0]["file_path"] == "/output/TK_creator.ts"
 
     assert status_store.get(channel_row["id"])["phase"] == "idle"
 
@@ -85,7 +82,7 @@ def test_worker_marks_recording_failed_on_remux_error(tmp_path, monkeypatch):
             on_status(
                 "recording_started",
                 user=self.config.user,
-                file_path="/output/TK_creator_flv.flv",
+                file_path="/output/TK_creator.ts",
             )
             on_status("recording_error", user=self.config.user, error="remux failed")
 

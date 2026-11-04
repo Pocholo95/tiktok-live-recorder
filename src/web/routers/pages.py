@@ -1,4 +1,5 @@
 from pathlib import Path
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
@@ -14,7 +15,6 @@ _PHASE_LABELS = {
     "checking": "Verificando",
     "offline": "Offline",
     "recording": "Grabando",
-    "converting": "Procesando",
     "idle": "En espera",
     "error": "Error",
     "stopped": "Pausado",
@@ -73,7 +73,6 @@ def create_channel(
     mode: str = Form("automatic"),
     automatic_interval: int = Form(5),
     proxy: str = Form(""),
-    bitrate: str = Form(""),
     use_telegram: bool = Form(False),
     db=Depends(get_db),
     supervisor=Depends(get_supervisor),
@@ -89,7 +88,6 @@ def create_channel(
             mode=mode_enum,
             automatic_interval=max(1, automatic_interval),
             proxy=proxy.strip() or None,
-            bitrate=bitrate.strip() or None,
             use_telegram=use_telegram,
         )
 
@@ -139,6 +137,7 @@ def library(
     date_from: str | None = None,
     date_to: str | None = None,
     no_clips: str | None = None,
+    state: str | None = None,
     db=Depends(get_db),
     templates=Depends(get_templates),
 ):
@@ -148,6 +147,7 @@ def library(
     recording_id = _parse_int(recording_id)
     channel_id = _parse_int(channel_id)
     no_clips_only = no_clips not in (None, "", "0", "false")
+    state = state if state in ("raw", "ready", "recording", "failed") else None
 
     channels = channels_repo.list_all(db)
     recordings = recordings_repo.list_filtered(
@@ -155,6 +155,7 @@ def library(
         channel_id=channel_id,
         date_from=date_from or None,
         date_to=f"{date_to} 23:59:59" if date_to else None,
+        state=state,
     )
 
     counts = clip_marks_repo.count_for_recordings(db, [r["id"] for r in recordings])
@@ -190,6 +191,39 @@ def library(
     # the target element's id in HX-Target, telling us which one to render.
     # Returning the full page (nav + <html>) for either would nest a
     # document inside a document.
+    # Current filters as a query string, so every link (recording items,
+    # state tabs) keeps the rest of the filters intact.
+    filter_params = {
+        "channel_id": channel_id,
+        "date_from": date_from,
+        "date_to": date_to,
+        "no_clips": "1" if no_clips_only else None,
+        "state": state,
+    }
+    filter_params = {k: v for k, v in filter_params.items() if v not in (None, "")}
+
+    def query(**overrides):
+        params = {**filter_params, **overrides}
+        return urlencode({k: v for k, v in params.items() if v not in (None, "")})
+
+    counts = recordings_repo.state_counts(db)
+    state_tabs = [
+        {
+            "key": key,
+            "label": label,
+            "count": counts[count_key],
+            "query": query(state=key),
+        }
+        for key, label, count_key in (
+            (None, "Todas", "all"),
+            ("raw", "Por convertir", "raw"),
+            ("ready", "Listas", "ready"),
+            ("recording", "Grabando", "recording"),
+            ("failed", "Fallidas", "failed"),
+        )
+        if key in (None, "raw", "ready") or counts[count_key] or state == key
+    ]
+
     hx_target = request.headers.get("hx-target")
     if hx_target == "library-main":
         template_name = "partials/library_main.html"
@@ -209,6 +243,10 @@ def library(
             "date_from": date_from,
             "date_to": date_to,
             "no_clips_only": no_clips_only,
+            "state": state,
+            "counts": counts,
+            "state_tabs": state_tabs,
+            "item_query": query(),
         },
     )
 

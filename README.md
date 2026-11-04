@@ -92,10 +92,9 @@ uv run python src/main.py -h
 <details>
 <summary>Docker 🐳</summary>
 
-> This fork adds fixes for corrupted recordings (the final `.mp4` is a real
-> re-encode instead of a remux, since TikTok's live connection reconnects
-> mid-recording and a plain `-c copy` remux can't survive that; `docker
-> stop` is also handled gracefully) and the WebUI hub below. Build the
+> This fork adds fixes for corrupted recordings (reconnects and resolution
+> changes are spliced into one continuous MPEG-TS file instead of a broken
+> FLV; `docker stop` is also handled gracefully) and the WebUI hub below. Build the
 > image from this repo to get them - the published
 > `michele0303/tiktok-live-recorder:latest` image does not include them.
 
@@ -119,6 +118,31 @@ status per channel, browse/play past recordings filtered by channel or
 date, and cut/download clips from a recording (generated on the fly and
 streamed straight to the browser - nothing is written to disk; only the
 in/out times are saved server-side if you bookmark them).
+
+### Recording format and the convert-on-your-PC workflow
+
+The server never transcodes. TikTok's live FLV drops and reconnects
+regularly (most often when a guest joins or leaves and the resolution
+changes); each reconnect is a brand-new FLV stream that most tools discard
+after the first splice. The recorder normalizes those splices in Python
+(one continuous timeline, see `src/core/flv_stream.py`) and remuxes them
+with `ffmpeg -c copy` into **MPEG-TS** - near-zero CPU, every frame kept,
+and the file stays readable even if the process dies mid-write.
+
+Browsers can't play `.ts`, so the library walks you through:
+
+1. **Download the raw** `.ts` from the recording's page.
+2. **Convert it on your PC** with the ffmpeg command shown there (NVIDIA
+   H.264/AV1 or CPU; one file or a whole folder in PowerShell). It scales
+   every resolution to one fixed size, pads the rest, and rebuilds
+   timestamps.
+3. **Upload the `.mp4`** (drag & drop, or `curl.exe -T file.mp4
+   http://<hub>/recordings/<id>/converted`). It's checked with ffprobe and
+   only then replaces the raw file, which is deleted. The clip editor is
+   enabled from then on.
+
+If you put the hub behind a reverse proxy, raise its upload size limit
+(e.g. nginx `client_max_body_size 0;`) - converted lives are large.
 
 The repo ships `docker-compose.example.yml` and `.env.example` instead of
 the real files, so your own config never conflicts with `git pull`. Copy
@@ -150,17 +174,13 @@ shown above (not `:ro` - the `/settings` page writes to them when you save
 credentials from the browser) so edits survive a container restart (see
 [How to set cookies](docs/GUIDE.md#how-to-set-cookies)).
 
-`--stop-timeout 60` (or `stop_grace_period: 60s` in compose) matters: the
-flv→mp4 conversion on shutdown reads the whole recording, so a long stream
-needs more than Docker's default 10s grace period to finish before
+`--stop-timeout 60` (or `stop_grace_period: 60s` in compose) gives
+recordings in progress time to flush and close their `.ts` file before
 `docker stop` escalates to `SIGKILL`.
 
 `--cpus="1.5"` (or `cpus: "${HUB_CPUS:-1.5}"` in compose, overridable with
 `HUB_CPUS=3 docker compose up` or a `.env` file) caps how much CPU the
-container can use. Recording conversion is a real transcode (not a cheap
-remux), so it will happily use every core it's given; if the box is on
-24/7 and you'd rather it take longer than run hot/loud, lower this instead
-of leaving it uncapped.
+container can use. Recording is only a remux, so this rarely matters.
 
 ### Environment variables (`serve` mode only)
 
@@ -191,7 +211,7 @@ uv run python src/main.py [options]
 | `-output <DIRECTORY>` | Directory where recordings will be saved. |
 | `-duration <SECONDS>` | Stop recording after this many seconds. |
 | `-proxy <URL>` | HTTP proxy to bypass regional restrictions. |
-| `-bitrate <BITRATE>` | Output bitrate for post-processing (e.g. `1M`, `1000k`). |
+| `-bitrate <BITRATE>` | No effect anymore: recordings are saved as raw `.ts` and converted offline. |
 | `-telegram` | Upload the recording to Telegram when done. Requires `telegram.json`. |
 | `-no-update-check` | Skip the automatic update check on startup. |
 

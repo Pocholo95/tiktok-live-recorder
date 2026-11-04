@@ -1,7 +1,49 @@
+{% from "partials/macros.html" import state_pill %}
 <main class="library-main" id="library-main">
   {% if selected_recording %}
-    {% include "partials/library_player.html" %}
+  {% set r = selected_recording %}
+  <header class="rec-head">
+    <div class="rec-head-title">
+      <h2>@{{ r.username }} {{ state_pill(r) }}</h2>
+      <p class="rec-head-meta">
+        <span>{{ r.started_at[:10] }} · {{ r.started_at[11:16] }}</span>
+        {% if r.duration_seconds %}<span>{{ r.duration_seconds | hhmmss }}</span>{% endif %}
+        {% if r.file_size_bytes %}<span>{{ r.file_size_bytes | filesize }}</span>{% endif %}
+        <span class="mono">.{{ r.format }}</span>
+      </p>
+    </div>
+    <div class="rec-head-actions">
+      {% if r.status == "completed" %}
+      <a class="btn btn-ghost" href="/media/{{ r.id }}/download">Descargar {{ "MP4" if r.format == "mp4" else "crudo" }}</a>
+      {% endif %}
+      <button type="button" class="btn btn-danger" data-delete-recording="{{ r.id }}" data-username="{{ r.username }}">Eliminar</button>
+    </div>
+  </header>
+
+  {% if r.status == "recording" %}
+  <section class="panel state-panel">
+    <img class="state-thumb" src="/media/{{ r.id }}/thumbnail" alt="">
+    <div>
+      <h3><span class="live-dot"></span> Grabando ahora</h3>
+      <p class="muted">Cuando el live termine vas a poder descargar el crudo y convertirlo.</p>
+    </div>
+  </section>
+  {% elif r.status == "failed" %}
+  <section class="panel state-panel">
+    <div>
+      <h3>La grabación falló</h3>
+      <p class="error-text">{{ r.error_message or "Error desconocido" }}</p>
+    </div>
+  </section>
+  {% elif r.format != "mp4" %}
+    {% include "partials/library_convert.html" %}
   {% else %}
-    <p class="empty">Todavía no hay ninguna grabación.</p>
+    {% include "partials/library_player.html" %}
+  {% endif %}
+  {% else %}
+  <div class="panel empty-state">
+    <h3>Todavía no hay grabaciones</h3>
+    <p class="muted">Agregá un canal en el Dashboard y las grabaciones van a aparecer acá.</p>
+  </div>
   {% endif %}
 </main>

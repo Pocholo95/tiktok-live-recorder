@@ -138,13 +138,33 @@ class _StreamingFakeTikTokAPI:
         yield from self._stream_chunks
 
 
-def test_start_recording_reports_status_transitions_on_success(tmp_path, monkeypatch):
-    events = []
+class _FakeRemuxer:
+    """Stands in for TsRemuxer: records what the recorder hands it."""
 
-    monkeypatch.setattr(
-        "core.tiktok_recorder.VideoManagement.convert_flv_to_mp4",
-        lambda file, bitrate=None, ffmpeg_path=None: file.replace("_flv.flv", ".mp4"),
-    )
+    instances = []
+
+    def __init__(self, output_path, ffmpeg_path=None):
+        self.output_path = output_path
+        self.chunks = []
+        self.connections = 1
+        self.closed = False
+        Path(output_path).write_bytes(b"")
+        _FakeRemuxer.instances.append(self)
+
+    def new_connection(self):
+        self.connections += 1
+
+    def write(self, chunk):
+        self.chunks.append(chunk)
+
+    def close(self):
+        self.closed = True
+
+
+def test_start_recording_writes_ts_without_converting(tmp_path, monkeypatch):
+    events = []
+    _FakeRemuxer.instances.clear()
+    monkeypatch.setattr("core.tiktok_recorder.TsRemuxer", _FakeRemuxer)
 
     recorder = TikTokRecorder(
         RecorderConfig(
@@ -160,24 +180,23 @@ def test_start_recording_reports_status_transitions_on_success(tmp_path, monkeyp
 
     recorder.start_recording("creator", "1234567890")
 
-    assert [phase for phase, _ in events] == [
-        "recording_started",
-        "converting",
-        "recording_finished",
-    ]
-    assert events[-1][1]["format"] == "mp4"
-    assert events[-1][1]["file_path"].endswith(".mp4")
+    assert [phase for phase, _ in events] == ["recording_started", "recording_finished"]
+    assert events[-1][1]["format"] == "ts"
+    assert events[-1][1]["file_path"].endswith(".ts")
+    remuxer = _FakeRemuxer.instances[-1]
+    assert remuxer.chunks == [b"x" * 5000]
+    assert remuxer.closed
 
 
-def test_start_recording_reports_error_status_when_conversion_fails(
-    tmp_path, monkeypatch
-):
-    events = []
+def test_start_recording_tells_remuxer_about_reconnects(tmp_path, monkeypatch):
+    _FakeRemuxer.instances.clear()
+    monkeypatch.setattr("core.tiktok_recorder.TsRemuxer", _FakeRemuxer)
 
-    monkeypatch.setattr(
-        "core.tiktok_recorder.VideoManagement.convert_flv_to_mp4",
-        lambda file, bitrate=None, ffmpeg_path=None: None,
-    )
+    class _ReconnectingAPI(_StreamingFakeTikTokAPI):
+        def is_room_alive(self, room_id):
+            # Alive for two connections, then the live ends.
+            self._room_alive_calls += 1
+            return self._room_alive_calls <= 2
 
     recorder = TikTokRecorder(
         RecorderConfig(
@@ -186,15 +205,12 @@ def test_start_recording_reports_error_status_when_conversion_fails(
             room_id="1234567890",
             cookies={},
             output=str(tmp_path),
-            on_status=lambda phase, **data: events.append((phase, data)),
         )
     )
-    recorder.tiktok = _StreamingFakeTikTokAPI(stream_chunks=[b"x" * 5000])
+    recorder.tiktok = _ReconnectingAPI(stream_chunks=[b"x" * 5000])
 
     recorder.start_recording("creator", "1234567890")
 
-    assert [phase for phase, _ in events] == [
-        "recording_started",
-        "converting",
-        "recording_error",
-    ]
+    remuxer = _FakeRemuxer.instances[-1]
+    assert remuxer.connections == 2
+    assert len(remuxer.chunks) == 2

@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 from db import channels_repo, recordings_repo  # noqa: E402
 from db.database import get_connection  # noqa: E402
 from utils.enums import Mode  # noqa: E402
+import web.routers.media as media_module  # noqa: E402
 
 
 def test_media_returns_404_for_unknown_recording(client):
@@ -150,3 +151,76 @@ def test_thumbnail_falls_back_to_placeholder_when_none_generated(client, app):
     response = client.get(f"/media/{recording_id}/thumbnail")
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("image/")
+
+
+def _raw_recording(app, tmp_path, status="completed"):
+    conn = get_connection(app.state.db_path)
+    raw = tmp_path / "TK_creator_2026.01.01_00-00-00.ts"
+    raw.write_bytes(b"raw transport stream")
+    recording_id = recordings_repo.start(
+        conn, channel_id=None, username="creator", file_path=str(raw)
+    )
+    if status == "completed":
+        recordings_repo.mark_completed(
+            conn, recording_id, file_path=str(raw), format="ts"
+        )
+    return conn, recording_id, raw
+
+
+def _fake_probe(codec="h264", format_name="mov,mp4,m4a,3gp,3g2,mj2"):
+    return lambda path: {
+        "streams": [{"codec_type": "video", "codec_name": codec}],
+        "format": {"format_name": format_name, "duration": "61.4"},
+    }
+
+
+def test_upload_converted_replaces_raw_recording(client, app, tmp_path, monkeypatch):
+    monkeypatch.setattr(media_module, "_probe", _fake_probe())
+    monkeypatch.setattr(media_module, "generate_thumbnail", lambda path: None)
+    conn, recording_id, raw = _raw_recording(app, tmp_path)
+
+    response = client.put(f"/recordings/{recording_id}/converted", content=b"mp4 bytes")
+
+    assert response.status_code == 200
+    recording = recordings_repo.get(conn, recording_id)
+    assert recording["format"] == "mp4"
+    assert recording["file_path"].endswith(".mp4")
+    assert recording["duration_seconds"] == 61
+    assert Path(recording["file_path"]).read_bytes() == b"mp4 bytes"
+    assert not raw.exists()
+
+
+def test_upload_converted_rejects_non_browser_codec(client, app, tmp_path, monkeypatch):
+    monkeypatch.setattr(media_module, "_probe", _fake_probe(codec="hevc"))
+    conn, recording_id, raw = _raw_recording(app, tmp_path)
+
+    response = client.put(f"/recordings/{recording_id}/converted", content=b"x")
+
+    assert response.status_code == 400
+    assert recordings_repo.get(conn, recording_id)["format"] == "ts"
+    assert raw.exists()
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_upload_converted_rejects_unreadable_file(client, app, tmp_path, monkeypatch):
+    monkeypatch.setattr(media_module, "_probe", lambda path: None)
+    conn, recording_id, raw = _raw_recording(app, tmp_path)
+
+    response = client.put(f"/recordings/{recording_id}/converted", content=b"junk")
+
+    assert response.status_code == 400
+    assert raw.exists()
+
+
+def test_upload_converted_refuses_recording_still_in_progress(client, app, tmp_path):
+    _, recording_id, raw = _raw_recording(app, tmp_path, status="recording")
+
+    response = client.put(f"/recordings/{recording_id}/converted", content=b"x")
+
+    assert response.status_code == 409
+    assert raw.exists()
+
+
+def test_upload_converted_404_for_unknown_recording(client):
+    response = client.put("/recordings/999/converted", content=b"x")
+    assert response.status_code == 404

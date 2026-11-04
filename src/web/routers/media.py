@@ -1,11 +1,16 @@
+import json
 import os
 import subprocess
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from db import recordings_repo
+from db.database import get_connection
+from supervisor.thumbnails import generate_thumbnail
+from utils.logger_manager import logger
 from web.deps import get_db
 
 router = APIRouter()
@@ -14,7 +19,14 @@ _PLACEHOLDER_THUMBNAIL = (
     Path(__file__).resolve().parent.parent / "static" / "placeholder.svg"
 )
 
-_MEDIA_TYPES = {"mkv": "video/x-matroska", "flv": "video/x-flv"}
+_MEDIA_TYPES = {
+    "mkv": "video/x-matroska",
+    "flv": "video/x-flv",
+    "ts": "video/mp2t",
+}
+
+# Codecs every current desktop/mobile browser can play inside an MP4.
+_BROWSER_VIDEO_CODECS = {"h264", "av1", "vp9"}
 
 
 @router.get("/media/{recording_id}")
@@ -121,3 +133,133 @@ def get_thumbnail(recording_id: int, db=Depends(get_db)):
         return FileResponse(_PLACEHOLDER_THUMBNAIL, media_type="image/svg+xml")
 
     raise HTTPException(status_code=404, detail="No thumbnail available")
+
+
+def _probe(path):
+    """ffprobe summary of a media file, or None if it isn't readable media."""
+    ffprobe_path = os.environ.get("FFPROBE_PATH", "ffprobe")
+    try:
+        result = subprocess.run(
+            [
+                ffprobe_path,
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration,format_name:stream=codec_type,codec_name",
+                "-of",
+                "json",
+                str(path),
+            ],
+            capture_output=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        return json.loads(result.stdout)
+    except ValueError:
+        return None
+
+
+def _finalize_upload(db_path, recording_id, part_path, final_path):
+    """
+    Validate the uploaded MP4 and swap it in for the raw recording. Runs in
+    a worker thread (ffprobe + thumbnail are blocking) with its own DB
+    connection. Returns (status_code, message).
+    """
+    info = _probe(part_path)
+    video_codecs = [
+        s.get("codec_name")
+        for s in (info or {}).get("streams", [])
+        if s.get("codec_type") == "video"
+    ]
+    format_name = (info or {}).get("format", {}).get("format_name", "")
+    if not video_codecs or "mp4" not in format_name:
+        part_path.unlink(missing_ok=True)
+        return 400, "El archivo no es un MP4 con video válido."
+    if video_codecs[0] not in _BROWSER_VIDEO_CODECS:
+        part_path.unlink(missing_ok=True)
+        return 400, (
+            f"El video es {video_codecs[0]}, que el navegador no reproduce. "
+            "Usá H.264 o AV1."
+        )
+
+    try:
+        duration = round(float(info["format"]["duration"]))
+    except (KeyError, TypeError, ValueError):
+        duration = None
+
+    conn = get_connection(db_path)
+    try:
+        recording = recordings_repo.get(conn, recording_id)
+        if recording is None:
+            part_path.unlink(missing_ok=True)
+            return 404, "La grabación ya no existe."
+
+        raw_path = Path(recording["file_path"])
+        os.replace(part_path, final_path)
+        thumbnail_path = generate_thumbnail(str(final_path))
+        recordings_repo.replace_with_converted(
+            conn,
+            recording_id,
+            file_path=str(final_path),
+            file_size_bytes=final_path.stat().st_size,
+            duration_seconds=duration,
+            thumbnail_path=thumbnail_path,
+        )
+        if raw_path != final_path:
+            raw_path.unlink(missing_ok=True)
+    finally:
+        conn.close()
+
+    logger.info(f"Recording #{recording_id} replaced with converted {final_path}")
+    return 200, "Listo"
+
+
+@router.put("/recordings/{recording_id}/converted")
+async def upload_converted(recording_id: int, request: Request):
+    """
+    Receives the MP4 converted offline (on the user's GPU) as the raw
+    request body and swaps it in for the raw .ts/.flv. The body is streamed
+    straight to a `.part` file next to the recording - never buffered in
+    memory or a temp dir - and only replaces the raw file once ffprobe
+    confirms it's a browser-playable MP4. Any failure leaves the raw
+    recording untouched.
+    """
+    db_path = request.app.state.db_path
+
+    def lookup():
+        conn = get_connection(db_path)
+        try:
+            return recordings_repo.get(conn, recording_id)
+        finally:
+            conn.close()
+
+    recording = await run_in_threadpool(lookup)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    if recording["status"] != "completed":
+        raise HTTPException(status_code=409, detail="La grabación todavía no terminó.")
+
+    raw_path = Path(recording["file_path"])
+    final_path = raw_path.with_suffix(".mp4")
+    part_path = raw_path.with_suffix(".mp4.part")
+
+    try:
+        with open(part_path, "wb") as out:
+            async for chunk in request.stream():
+                out.write(chunk)
+    except Exception:
+        part_path.unlink(missing_ok=True)
+        raise
+
+    if part_path.stat().st_size == 0:
+        part_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="El archivo llegó vacío.")
+
+    status_code, message = await run_in_threadpool(
+        _finalize_upload, db_path, recording_id, part_path, final_path
+    )
+    return JSONResponse({"detail": message}, status_code=status_code)

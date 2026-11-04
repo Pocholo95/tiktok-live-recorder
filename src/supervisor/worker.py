@@ -37,7 +37,6 @@ class Worker:
             cookies=read_cookies(),
             proxy=channel_row["proxy"],
             output=str(output_dir),
-            bitrate=channel_row["bitrate"],
             use_telegram=bool(channel_row["use_telegram"]),
             stop_event=self._stop_event,
             on_status=self._on_status,
@@ -88,12 +87,6 @@ class Worker:
             self._status_store.set(self.channel_id, phase="offline")
             return
 
-        if phase == "converting":
-            self._status_store.set(
-                self.channel_id, phase="converting", detail=data.get("file_path")
-            )
-            return
-
         conn = self._get_connection(self._db_path)
         try:
             if phase == "recording_started":
@@ -103,7 +96,7 @@ class Worker:
                     channel_id=self.channel_id,
                     username=data.get("user", self.username),
                     file_path=data["file_path"],
-                    format="flv",
+                    format="ts",
                 )
                 self._status_store.set(
                     self.channel_id, phase="recording", detail=data.get("file_path")
@@ -117,7 +110,7 @@ class Worker:
         finally:
             conn.close()
 
-    def _finish_recording(self, conn, *, file_path, format="mp4", **_ignored):
+    def _finish_recording(self, conn, *, file_path, format="ts", **_ignored):
         duration_seconds = None
         if self._recording_started_at is not None:
             duration_seconds = round(time.time() - self._recording_started_at)

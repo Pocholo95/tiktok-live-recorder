@@ -1,10 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Library - TikTok Live Recorder Hub{% endblock %}
+{% block title %}Biblioteca - TikTok Live Recorder Hub{% endblock %}
 {% block content %}
 <link rel="stylesheet" href="/static/nouislider.min.css">
 <script src="/static/nouislider.min.js"></script>
-
-<h1>Grabaciones</h1>
 
 {% include "partials/library_content.html" %}
 
@@ -14,12 +12,26 @@
 // the next full sidebar re-render (page load or filter change). Update it
 // immediately here instead of waiting on the server.
 document.addEventListener("click", (e) => {
-  const item = e.target.closest(".recording-list-item");
+  const item = e.target.closest(".rec-item");
   if (!item) return;
-  document.querySelectorAll(".recording-list-item.active").forEach((el) => {
+  document.querySelectorAll(".rec-item.active").forEach((el) => {
     el.classList.remove("active");
   });
   item.classList.add("active");
+});
+
+// Delete lives in the (htmx-swapped) recording header for every state, so
+// handle it once here by delegation instead of per swapped-in script.
+document.addEventListener("click", (e) => {
+  const button = e.target.closest("[data-delete-recording]");
+  if (!button) return;
+  const id = button.dataset.deleteRecording;
+  if (!confirm(`¿Eliminar esta grabación de @${button.dataset.username}? No se puede deshacer.`)) {
+    return;
+  }
+  fetch(`/recordings/${id}`, { method: "DELETE" }).then((response) => {
+    if (response.ok) window.location = "/library";
+  });
 });
 </script>
 {% endblock %}

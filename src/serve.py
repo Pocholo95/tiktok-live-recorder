@@ -25,9 +25,8 @@ def main():
 
     # Any recording still marked "recording" at this point predates this
     # process (a container restart/crash mid-recording, most commonly) -
-    # finish converting it or mark it failed. Runs in the background so a
-    # big backlog of orphaned files (or a low CPU cap) doesn't delay the
-    # dashboard from coming up.
+    # keep its raw .ts or mark it failed. Runs in the background so a big
+    # backlog of orphaned files doesn't delay the dashboard from coming up.
     threading.Thread(
         target=recover_orphaned_recordings,
         args=(db_path,),
@@ -48,8 +47,8 @@ def main():
     port = int(os.environ.get("HUB_PORT", "8000"))
     # uvicorn installs its own SIGTERM/SIGINT handlers here and runs the
     # app's lifespan shutdown (which calls supervisor.stop(wait=True)) on
-    # `docker stop`, so recordings in progress get to finish converting
-    # instead of being killed mid-write.
+    # `docker stop`, so recordings in progress get to close their file
+    # cleanly instead of being killed mid-write.
     uvicorn.run(app, host=host, port=port)
 
 

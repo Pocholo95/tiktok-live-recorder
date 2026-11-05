@@ -292,3 +292,19 @@ def _image_type(path):
     if head[1:4] == b"PNG":
         return "image/png"
     return "image/jpeg"
+
+
+def participants_debug_path(recording_file_path):
+    """Raw TikTok link data the guest tracker logged next to a recording."""
+    return Path(recording_file_path).with_suffix(".participants.jsonl")
+
+
+@router.get("/recordings/{recording_id}/participants-debug")
+def download_participants_debug(recording_id: int, db=Depends(get_db)):
+    recording = recordings_repo.get(db, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    path = participants_debug_path(recording["file_path"])
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="No diagnostics for this recording")
+    return FileResponse(path, media_type="application/x-ndjson", filename=path.name)

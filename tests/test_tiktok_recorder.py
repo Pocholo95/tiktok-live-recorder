@@ -248,7 +248,7 @@ def test_report_profile_emits_avatar_from_last_lookup():
 class _FakeTracker:
     instances = []
 
-    def __init__(self, api, room_id, on_change):
+    def __init__(self, api, room_id, on_change, **kwargs):
         self.on_change = on_change
         self.started = self.stopped = False
         _FakeTracker.instances.append(self)

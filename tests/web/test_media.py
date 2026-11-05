@@ -241,3 +241,26 @@ def test_avatar_served_with_sniffed_type_and_misses_cached(client, app, tmp_path
     miss = client.get("/avatars/nobody")
     assert miss.status_code == 404
     assert "max-age" in miss.headers["cache-control"]
+
+
+def test_participants_debug_download_and_cleanup(client, app, tmp_path):
+    conn = get_connection(app.state.db_path)
+    raw = tmp_path / "TK_creator_2026.01.01_00-00-00.ts"
+    raw.write_bytes(b"ts")
+    debug = tmp_path / "TK_creator_2026.01.01_00-00-00.participants.jsonl"
+    debug.write_bytes(b'{"ids": []}' + bytes([10]))
+    recording_id = recordings_repo.start(
+        conn, channel_id=None, username="creator", file_path=str(raw)
+    )
+    recordings_repo.mark_completed(conn, recording_id, file_path=str(raw), format="ts")
+
+    response = client.get(f"/recordings/{recording_id}/participants-debug")
+    assert response.status_code == 200
+    assert response.text == '{"ids": []}\n'
+    assert "participants.jsonl" in response.headers["content-disposition"]
+
+    client.delete(f"/recordings/{recording_id}")
+    assert not debug.exists()
+    assert (
+        client.get(f"/recordings/{recording_id}/participants-debug").status_code == 404
+    )

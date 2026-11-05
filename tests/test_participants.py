@@ -90,31 +90,96 @@ _HANDLES = {
 }
 
 
-def test_tracker_records_join_leave_and_rejoin_ranges():
+def _run_polls(tracker, now, times):
+    for t in times:
+        now[0] = t
+        tracker.poll_once()
+
+
+def test_tracker_closes_only_after_two_misses_and_merges_short_gaps():
     now = [0.0]
     snapshots = []
     api = _Api(
         [
-            _room("200000000000"),
-            _room("200000000000", "300000000000"),
-            _room("300000000000"),
-            _room("200000000000", "300000000000"),
+            _room("200000000000"),  # t=10 ana joins
+            _room("200000000000", "300000000000"),  # t=40 beto joins
+            _room("300000000000"),  # t=70 ana missing (1st miss)
+            _room("300000000000"),  # t=100 ana missing (2nd) -> left at 70
+            _room("300000000000"),  # t=400
+            _room("200000000000", "300000000000"),  # t=430 ana back, gap 360 s
         ],
         _HANDLES,
     )
     tracker = ParticipantTracker(api, "room", snapshots.append, clock=lambda: now[0])
 
-    for t in (10, 40, 70, 100):
-        now[0] = t
-        tracker.poll_once()
-    now[0] = 130
+    _run_polls(tracker, now, (10, 40, 70, 100, 400, 430))
+    now[0] = 460
     tracker.stop()
 
     assert snapshots[-1] == [
         {"username": "ana", "start_seconds": 10, "end_seconds": 70},
-        {"username": "beto", "start_seconds": 40, "end_seconds": 130},
-        {"username": "ana", "start_seconds": 100, "end_seconds": 130},
+        {"username": "beto", "start_seconds": 40, "end_seconds": 460},
+        {"username": "ana", "start_seconds": 430, "end_seconds": 460},
     ]
+
+
+def test_single_missing_poll_does_not_split_a_stay():
+    now = [0.0]
+    snapshots = []
+    api = _Api([_room("200000000000"), _room(), _room("200000000000")], _HANDLES)
+    tracker = ParticipantTracker(api, "room", snapshots.append, clock=lambda: now[0])
+
+    _run_polls(tracker, now, (0, 30, 60))
+    now[0] = 90
+    tracker.stop()
+
+    assert snapshots[-1] == [{"username": "ana", "start_seconds": 0, "end_seconds": 90}]
+
+
+def test_reported_case_short_swap_stays_one_row_per_person():
+    # Real report: @favoritamariiaofi 12:11-13:42, @favoritarespaldo
+    # 13:42-14:43, @favoritamariiaofi 14:43-19:08 although she never left.
+    now = [0.0]
+    snapshots = []
+    rooms = (
+        [_room("200000000000")] * 4  # mariia (as "ana") 0-90
+        + [_room("300000000000")] * 2  # TikTok points at respaldo for ~1 min
+        + [_room("200000000000")] * 3
+    )
+    tracker = ParticipantTracker(
+        _Api(rooms, _HANDLES), "room", snapshots.append, clock=lambda: now[0]
+    )
+
+    _run_polls(tracker, now, range(0, 270, 30))
+    now[0] = 270
+    tracker.stop()
+
+    rows = snapshots[-1]
+    assert [r["username"] for r in rows] == ["ana", "beto"]
+    assert rows[0] == {"username": "ana", "start_seconds": 0, "end_seconds": 270}
+
+
+def test_diagnostics_written_only_when_linked_ids_change(tmp_path):
+    import json
+
+    now = [0.0]
+    debug = tmp_path / "rec.participants.jsonl"
+    api = _Api(
+        [_room("200000000000"), _room("200000000000"), _room("300000000000")],
+        _HANDLES,
+    )
+    tracker = ParticipantTracker(
+        api, "room", lambda s: None, clock=lambda: now[0], debug_path=str(debug)
+    )
+
+    _run_polls(tracker, now, (0, 30, 60))
+
+    lines = [
+        json.loads(line) for line in debug.read_text(encoding="utf-8").splitlines()
+    ]
+    assert [line["ids"] for line in lines] == [["200000000000"], ["300000000000"]]
+    assert lines[1]["resolved"] == {"300000000000": "beto"}
+    assert "link_mic" in lines[0]
 
 
 def test_tracker_failures_never_raise_and_keep_state():

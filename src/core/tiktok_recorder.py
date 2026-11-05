@@ -254,7 +254,7 @@ class TikTokRecorder:
         output = self._build_output_path(user)
         self._on_status("recording_started", user=user, file_path=output)
 
-        tracker = self._start_participant_tracker(user, room_id)
+        tracker = self._start_participant_tracker(user, room_id, output)
         try:
             self._record_stream(user, room_id, live_urls, output)
         finally:
@@ -264,7 +264,7 @@ class TikTokRecorder:
                 tracker.stop()
         self._on_status("recording_finished", user=user, file_path=output, format="ts")
 
-    def _start_participant_tracker(self, user, room_id):
+    def _start_participant_tracker(self, user, room_id, output):
         """Best-effort: any failure only means no guest names for this live."""
         if not self._track_participants:
             return None
@@ -275,6 +275,7 @@ class TikTokRecorder:
                 lambda snapshot: self._on_status(
                     "participants", user=user, participants=snapshot
                 ),
+                debug_path=str(Path(output).with_suffix(".participants.jsonl")),
                 **(
                     {"interval": self._participants_interval}
                     if self._participants_interval

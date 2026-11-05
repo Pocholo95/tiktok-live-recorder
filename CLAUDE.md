@@ -73,6 +73,15 @@ copies of the `*.example` files.
   for a linked co-host, `linked_user_list` / `show_user_list` for
   multi-guest - the latter not yet seen populated in a real capture) and
   turns ids into handles via the `tiktok.com/share/user/<id>` redirect.
+  Someone counts as gone only after 2 consecutive missing polls, and a
+  return within 120 s continues the same row (TikTok's data flickers).
+  Every time the set of linked ids changes, the raw link data is appended
+  to `<recording>.participants.jsonl` next to the recording (downloadable
+  from the guests panel) - ask the user for it when a list looks wrong.
+  Open question: a user saw two different co-hosts alternate while both
+  were likely on screen; `rival_anchor_id` may only name the current
+  battle opponent in 3+ creator links. Confirm with a diagnostics file
+  before switching sources (battle_scores / TikTokLive websocket).
   Age-restricted lives need `sessionid_ss` in cookies.json. Any failure
   only drops the names; it must never affect the recording. Time ranges
   go to `recording_participants` and are shown only in the web UI (the

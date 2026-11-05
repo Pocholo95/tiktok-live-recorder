@@ -319,6 +319,10 @@ def delete_recording(recording_id: int, db=Depends(get_db)):
             Path(recording["file_path"]).unlink(missing_ok=True)
         if recording["thumbnail_path"]:
             Path(recording["thumbnail_path"]).unlink(missing_ok=True)
+        if recording["file_path"]:
+            Path(recording["file_path"]).with_suffix(".participants.jsonl").unlink(
+                missing_ok=True
+            )
         recordings_repo.delete(db, recording_id)
 
     return PlainTextResponse("")

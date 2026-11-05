@@ -13,6 +13,7 @@ no session, expired session, TikTok changes - just means no names are
 recorded. It never raises into the recorder and never stops a recording.
 """
 
+import json
 import re
 import threading
 import time
@@ -93,6 +94,29 @@ class UsernameResolver:
         return username
 
 
+# A guest must be missing from this many consecutive polls before they
+# count as gone: TikTok's room info flickers (e.g. during layout changes).
+MISSES_TO_LEAVE = 2
+# A guest who reappears within this many seconds of leaving continues the
+# same time range instead of starting a new row.
+MERGE_GAP_SECONDS = 120
+
+_DEBUG_DROP_KEYS = ("avatar", "url_list", "icon", "image", "badge")
+
+
+def _debug_trim(value):
+    """Room info minus picture URLs, to keep the diagnostic file small."""
+    if isinstance(value, dict):
+        return {
+            k: _debug_trim(v)
+            for k, v in value.items()
+            if not any(drop in k.lower() for drop in _DEBUG_DROP_KEYS)
+        }
+    if isinstance(value, list):
+        return [_debug_trim(v) for v in value]
+    return value
+
+
 class ParticipantTracker:
     """
     Polls room info while a recording runs and keeps, per participant, the
@@ -101,19 +125,32 @@ class ParticipantTracker:
     [{"username", "start_seconds", "end_seconds" (None while present)}].
     `interval` is seconds, or a callable returning them - re-read before
     every wait, so a change in Settings applies to lives already recording.
+    `debug_path`, if given, gets a JSON line with TikTok's raw link data
+    every time the set of linked ids changes (for diagnosing odd lists).
     """
 
-    def __init__(self, api, room_id, on_change, interval=POLL_SECONDS, clock=None):
+    def __init__(
+        self,
+        api,
+        room_id,
+        on_change,
+        interval=POLL_SECONDS,
+        clock=None,
+        debug_path=None,
+    ):
         self._api = api
         self._room_id = room_id
         self._on_change = on_change
         self._interval = interval
         self._clock = clock or time.monotonic
+        self._debug_path = debug_path
         self._resolver = UsernameResolver(api.http_client)
         self._started = self._clock()
         self._stop = threading.Event()
         self._intervals = []  # dicts, in order of first appearance
         self._open = {}  # username -> its open interval dict
+        self._misses = {}  # username -> (consecutive misses, first miss time)
+        self._last_ids = None
         self._warned = False
         self._thread = threading.Thread(
             target=self._run, name="participants", daemon=True
@@ -128,8 +165,10 @@ class ParticipantTracker:
             self._thread.join(timeout=10)
         if self._open:
             now = self._elapsed()
-            for interval in self._open.values():
-                interval["end_seconds"] = now
+            for username, interval in self._open.items():
+                # Someone already missing at the end left when first missed.
+                misses = self._misses.get(username)
+                interval["end_seconds"] = misses[1] if misses else now
             self._open.clear()
             self._emit()
 
@@ -156,31 +195,85 @@ class ParticipantTracker:
                     "room info unavailable (age-restricted live without a "
                     "valid session cookie?)"
                 )
-            present = set()
-            for user_id in extract_participant_ids(room_data):
+            ids = extract_participant_ids(room_data)
+            resolved = {}
+            for user_id in ids:
                 username = self._resolver.resolve(user_id)
                 if username:
-                    present.add(username)
+                    resolved[user_id] = username
         except Exception as e:
             if not self._warned:
                 logger.warning(f"Guest names unavailable for this live: {e}")
                 self._warned = True
             return
-        self._update(present)
+        self._write_debug(room_data, ids, resolved)
+        self._update(set(resolved.values()))
+
+    def _write_debug(self, room_data, ids, resolved):
+        if not self._debug_path or ids == self._last_ids:
+            return
+        self._last_ids = ids
+        record = {
+            "elapsed_seconds": self._elapsed(),
+            "time_utc": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+            "ids": sorted(ids),
+            "resolved": resolved,
+            "link_mic": _debug_trim(room_data.get("link_mic")),
+            "linker_map": room_data.get("linker_map"),
+            "linkmic_layout": room_data.get("linkmic_layout"),
+            "with_linkmic": room_data.get("with_linkmic"),
+        }
+        try:
+            with open(self._debug_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        except OSError as e:
+            logger.warning(f"Could not write guest diagnostics: {e}")
+            self._debug_path = None
 
     def _update(self, present):
         now = self._elapsed()
         changed = False
-        for username in present - set(self._open):
-            interval = {"username": username, "start_seconds": now, "end_seconds": None}
-            self._intervals.append(interval)
-            self._open[username] = interval
+
+        for username in present:
+            self._misses.pop(username, None)
+            if username in self._open:
+                continue
+            previous = self._last_interval(username)
+            if (
+                previous is not None
+                and previous["end_seconds"] is not None
+                and now - previous["end_seconds"] <= MERGE_GAP_SECONDS
+            ):
+                previous["end_seconds"] = None  # short absence: same stay
+                self._open[username] = previous
+            else:
+                interval = {
+                    "username": username,
+                    "start_seconds": now,
+                    "end_seconds": None,
+                }
+                self._intervals.append(interval)
+                self._open[username] = interval
             changed = True
+
         for username in set(self._open) - present:
-            self._open.pop(username)["end_seconds"] = now
-            changed = True
+            count, first_miss = self._misses.get(username, (0, now))
+            count += 1
+            if count >= MISSES_TO_LEAVE:
+                self._open.pop(username)["end_seconds"] = first_miss
+                self._misses.pop(username, None)
+                changed = True
+            else:
+                self._misses[username] = (count, first_miss)
+
         if changed:
             self._emit()
+
+    def _last_interval(self, username):
+        for interval in reversed(self._intervals):
+            if interval["username"] == username:
+                return interval
+        return None
 
     def _emit(self):
         try:

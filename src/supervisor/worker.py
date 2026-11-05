@@ -3,7 +3,7 @@ import time
 from pathlib import Path
 
 from core.tiktok_recorder import TikTokRecorder
-from db import channels_repo, recordings_repo, settings_repo
+from db import channels_repo, participants_repo, recordings_repo, settings_repo
 from notify import discord_webhook
 from supervisor import profiles
 from supervisor.thumbnails import generate_thumbnail
@@ -129,6 +129,12 @@ class Worker:
                 self._status_store.set(
                     self.channel_id, phase="recording", detail=data.get("file_path")
                 )
+
+            elif phase == "participants":
+                if self._current_recording_id is not None:
+                    participants_repo.replace_for_recording(
+                        conn, self._current_recording_id, data.get("participants") or []
+                    )
 
             elif phase == "recording_finished":
                 self._finish_recording(conn, **data)

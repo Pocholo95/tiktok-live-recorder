@@ -146,6 +146,17 @@ TikTok lookup the recorder already does on every check (no extra
 requests), saved under `OUTPUT_DIR/avatars/` and refreshed every few hours.
 They appear after a channel's first check.
 
+### Who's on screen with the creator
+
+While recording, the hub checks the room every 30 s for a linked co-host
+or multi-guest guests and stores who was there and when. The library shows
+them per recording ("con @…", with a jump-to button once it's an MP4), and
+the convert command can burn the names into the video (creator's @ in the
+corner, each guest's @ only while they were linked). It's best-effort:
+age-restricted lives need your `sessionid_ss` cookie (Settings), and if the
+session is missing or expired the live is still recorded, just without
+names.
+
 ### Discord live notices
 
 Settings → *Avisos por Discord*: paste a Discord webhook URL (Server

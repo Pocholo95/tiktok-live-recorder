@@ -243,3 +243,76 @@ def test_report_profile_emits_avatar_from_last_lookup():
             },
         )
     ]
+
+
+class _FakeTracker:
+    instances = []
+
+    def __init__(self, api, room_id, on_change):
+        self.on_change = on_change
+        self.started = self.stopped = False
+        _FakeTracker.instances.append(self)
+
+    def start(self):
+        self.started = True
+
+    def stop(self):
+        self.stopped = True
+        self.on_change([{"username": "guest", "start_seconds": 1, "end_seconds": 2}])
+
+
+def _recorder(tmp_path, events=None):
+    return TikTokRecorder(
+        RecorderConfig(
+            mode=Mode.MANUAL,
+            user="creator",
+            room_id="1234567890",
+            cookies={},
+            output=str(tmp_path),
+            on_status=(lambda phase, **data: events.append(phase))
+            if events is not None
+            else None,
+        )
+    )
+
+
+def test_participants_are_final_before_recording_finished(tmp_path, monkeypatch):
+    events = []
+    _FakeTracker.instances.clear()
+    monkeypatch.setattr("core.tiktok_recorder.TsRemuxer", _FakeRemuxer)
+    monkeypatch.setattr("core.tiktok_recorder.ParticipantTracker", _FakeTracker)
+    recorder = _recorder(tmp_path, events)
+    recorder.tiktok = _StreamingFakeTikTokAPI(stream_chunks=[b"x" * 5000])
+
+    recorder.start_recording("creator", "1234567890")
+
+    assert events == ["recording_started", "participants", "recording_finished"]
+    assert _FakeTracker.instances[-1].started
+
+
+def test_cli_mode_does_not_track_participants(tmp_path, monkeypatch):
+    _FakeTracker.instances.clear()
+    monkeypatch.setattr("core.tiktok_recorder.TsRemuxer", _FakeRemuxer)
+    monkeypatch.setattr("core.tiktok_recorder.ParticipantTracker", _FakeTracker)
+    recorder = _recorder(tmp_path)
+    recorder.tiktok = _StreamingFakeTikTokAPI(stream_chunks=[b"x" * 5000])
+
+    recorder.start_recording("creator", "1234567890")
+
+    assert _FakeTracker.instances == []
+
+
+def test_tracker_startup_failure_does_not_stop_recording(tmp_path, monkeypatch):
+    events = []
+    monkeypatch.setattr("core.tiktok_recorder.TsRemuxer", _FakeRemuxer)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("no session")
+
+    monkeypatch.setattr("core.tiktok_recorder.ParticipantTracker", boom)
+    recorder = _recorder(tmp_path, events)
+    recorder.tiktok = _StreamingFakeTikTokAPI(stream_chunks=[b"x" * 5000])
+
+    recorder.start_recording("creator", "1234567890")
+
+    assert events == ["recording_started", "recording_finished"]

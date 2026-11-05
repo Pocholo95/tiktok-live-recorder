@@ -74,6 +74,9 @@
               {% if recording.file_size_bytes %}· {{ recording.file_size_bytes | filesize }}{% endif %}
               {% if recording.clip_count %}· {{ recording.clip_count }} clip{{ "s" if recording.clip_count != 1 else "" }}{% endif %}
             </div>
+            {% if recording.guests %}
+            <div class="rec-guests" title="con @{{ recording.guests | join(', @') }}">con @{{ recording.guests | join(", @") }}</div>
+            {% endif %}
           </div>
         </a>
         {% endfor %}

@@ -20,6 +20,17 @@ document.addEventListener("click", (e) => {
   item.classList.add("active");
 });
 
+// "▶ Ir" next to each guest: jump the player to when they joined.
+document.addEventListener("click", (e) => {
+  const button = e.target.closest("[data-seek]");
+  if (!button) return;
+  const video = document.getElementById("clip-video");
+  if (!video) return;
+  video.currentTime = parseFloat(button.dataset.seek) || 0;
+  video.play();
+  video.scrollIntoView({ behavior: "smooth", block: "center" });
+});
+
 // Delete lives in the (htmx-swapped) recording header for every state, so
 // handle it once here by delegation instead of per swapped-in script.
 document.addEventListener("click", (e) => {

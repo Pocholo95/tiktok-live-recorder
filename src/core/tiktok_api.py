@@ -92,6 +92,15 @@ class TikTokAPI:
             or stream_url.get("rtmp_pull_url")
         )
 
+    def get_room_data(self, room_id):
+        """Room info `data` dict, or None if TikTok refused it (e.g. 4003110)."""
+        room_info = self.http_client.get(
+            f"{self.WEBCAST_URL}/webcast/room/info/?aid=1988&room_id={room_id}"
+        ).json()
+        if room_info.get("status_code", 0) != 0:
+            return None
+        return room_info.get("data") or None
+
     def get_sec_uid(self):
         """
         Returns the sec_uid of the authenticated user.

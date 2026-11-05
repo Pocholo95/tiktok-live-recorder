@@ -189,3 +189,45 @@ def test_worker_throttles_profile_saves(tmp_path, monkeypatch):
 
     assert len(saved) == 1
     assert saved[0][3:] == ("creator", "u", "n")
+
+
+def test_worker_stores_participants_for_current_recording(tmp_path, monkeypatch):
+    from db import participants_repo
+
+    class _GuestRecorder(_FakeRecorder):
+        def run(self):
+            on_status = self.config.on_status
+            on_status("recording_started", user="creator", file_path="/output/a.ts")
+            on_status(
+                "participants",
+                user="creator",
+                participants=[
+                    {"username": "guest", "start_seconds": 12.5, "end_seconds": None}
+                ],
+            )
+            on_status(
+                "recording_finished",
+                user="creator",
+                file_path="/output/a.ts",
+                format="ts",
+            )
+
+    monkeypatch.setattr(worker_module, "TikTokRecorder", _GuestRecorder)
+    monkeypatch.setattr(worker_module, "generate_thumbnail", lambda path, **kw: None)
+    monkeypatch.setattr(worker_module, "read_cookies", lambda: {})
+
+    db_path = str(tmp_path / "hub.db")
+    init_db(db_path)
+    conn = get_connection(db_path)
+    row = _channel_row(conn)
+    worker = worker_module.Worker(
+        row, db_path, get_connection, tmp_path, ChannelStatusStore()
+    )
+    worker.start()
+    worker.join(timeout=2)
+
+    recording = recordings_repo.list_filtered(conn, channel_id=row["id"])[0]
+    rows = participants_repo.list_for_recording(conn, recording["id"])
+    assert [(r["username"], r["start_seconds"], r["end_seconds"]) for r in rows] == [
+        ("guest", 12.5, None)
+    ]

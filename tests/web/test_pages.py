@@ -378,3 +378,23 @@ def test_toggle_channel_notify(client, app):
     assert response.status_code == 200
     assert channels_repo.get(conn, channel_id)["use_telegram"] == 1
     assert "bell on" in response.text
+
+
+def test_library_shows_guests_in_sidebar_panel_and_command(client, app):
+    from db import participants_repo
+
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    raw_id = _completed(conn, channel_id, "/output/raw.ts", "ts")
+    participants_repo.replace_for_recording(
+        conn,
+        raw_id,
+        [{"username": "os_grce", "start_seconds": 75, "end_seconds": 300}],
+    )
+
+    text = client.get(f"/library?recording_id={raw_id}").text
+
+    assert "con @os_grce" in text  # sidebar
+    assert "00:01:15 → 00:05:00" in text  # guests panel
+    assert "data-guests=" in text  # fed to the ffmpeg command builder
+    assert '"username": "os_grce"' in text

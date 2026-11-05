@@ -815,3 +815,13 @@ kbd {
 .rec-head h2 .avatar { margin-right: -0.15rem; }
 .creator-nick { color: var(--muted); font-weight: 400; font-size: 0.95rem; }
 .creator-card-name .nick { color: var(--text); opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- Guests ------------------------------------------------------- */
+
+.rec-guests { font-size: 0.72rem; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.guest { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.guest:last-child { border-bottom: none; }
+.guest .mono { margin-left: auto; }
+.cmd-names { margin-bottom: 0.75rem; flex-wrap: wrap; }
+.cmd-names.is-disabled { opacity: 0.45; }

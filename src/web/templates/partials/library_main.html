@@ -20,6 +20,27 @@
     </div>
   </header>
 
+  {% if participants %}
+  <section class="panel guests-panel">
+    <div class="panel-head">
+      <h3>Con quién estuvo</h3>
+      <span class="muted">{{ participants | map(attribute="username") | unique | list | length }} persona{{ "s" if (participants | map(attribute="username") | unique | list | length) != 1 else "" }}</span>
+    </div>
+    <ul class="guests">
+      {% for p in participants %}
+      <li class="guest">
+        {{ avatar(p.username, "xs") }}
+        <a class="creator-link" href="https://www.tiktok.com/@{{ p.username }}" target="_blank" rel="noopener">@{{ p.username }}</a>
+        <span class="mono muted">{{ p.start_seconds | hhmmss }} → {{ (p.end_seconds | hhmmss) if p.end_seconds is not none else ("en curso" if r.status == "recording" else "final") }}</span>
+        {% if r.format == "mp4" and r.status == "completed" %}
+        <button type="button" class="btn btn-ghost btn-small" data-seek="{{ p.start_seconds }}">▶ Ir</button>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
   {% if r.status == "recording" %}
   <section class="panel state-panel">
     <img class="state-thumb" src="/media/{{ r.id }}/thumbnail" alt="">

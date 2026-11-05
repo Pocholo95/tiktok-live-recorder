@@ -57,3 +57,18 @@ CREATE TABLE IF NOT EXISTS profiles (
     avatar_path TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Who was linked into the live with the creator (co-hosts, multi-guest
+-- guests) and when, in seconds since the recording started. Best-effort:
+-- captured from room info while recording; end_seconds NULL = still there
+-- when the data was last saved.
+CREATE TABLE IF NOT EXISTS recording_participants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recording_id INTEGER NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
+    username TEXT NOT NULL,
+    start_seconds REAL NOT NULL,
+    end_seconds REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_recording_participants_recording
+    ON recording_participants(recording_id);

@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 from db import (
     channels_repo,
     clip_marks_repo,
+    participants_repo,
     profiles_repo,
     recordings_repo,
     settings_repo,
@@ -176,6 +177,9 @@ def library(
     )
 
     counts = clip_marks_repo.count_for_recordings(db, [r["id"] for r in recordings])
+    guests = participants_repo.usernames_for_recordings(
+        db, [r["id"] for r in recordings]
+    )
     if no_clips_only:
         recordings = [r for r in recordings if counts.get(r["id"], 0) == 0]
 
@@ -185,6 +189,7 @@ def library(
         date_str = (row["started_at"] or "")[:10]
         entry = dict(row)
         entry["clip_count"] = counts.get(row["id"], 0)
+        entry["guests"] = guests.get(row["id"], [])
         if date_str != current_date:
             current_date = date_str
             groups.append({"date": date_str, "recordings": []})
@@ -256,6 +261,14 @@ def library(
             "groups": groups,
             "selected_recording": selected_recording,
             "marks": marks,
+            "participants": [
+                dict(p)
+                for p in (
+                    participants_repo.list_for_recording(db, selected_recording["id"])
+                    if selected_recording is not None
+                    else []
+                )
+            ],
             "selected_channel_id": channel_id,
             "date_from": date_from,
             "date_to": date_to,

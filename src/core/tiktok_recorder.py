@@ -6,6 +6,7 @@ from threading import Thread
 from requests import RequestException
 
 from core.flv_stream import TsRemuxer
+from core.participants import ParticipantTracker
 from core.tiktok_api import TikTokAPI
 from utils.custom_exceptions import LiveNotFound, TikTokRecorderError, UserLiveError
 from utils.enums import Error, Mode, TikTokError, TimeOut
@@ -31,6 +32,9 @@ class TikTokRecorder:
         self._cookies = config.cookies
         self._stop_event = config.stop_event
         self._on_status = config.on_status or (lambda *args, **kwargs: None)
+        # Guest names are a hub feature (they're shown in the library); the
+        # plain CLI has nowhere to put them, so don't poll TikTok for them.
+        self._track_participants = config.on_status is not None
 
     def _stopped(self) -> bool:
         return self._stop_event is not None and self._stop_event.is_set()
@@ -228,6 +232,35 @@ class TikTokRecorder:
         output = self._build_output_path(user)
         self._on_status("recording_started", user=user, file_path=output)
 
+        tracker = self._start_participant_tracker(user, room_id)
+        try:
+            self._record_stream(user, room_id, live_urls, output)
+        finally:
+            # Stopped before "recording_finished" so the final guest time
+            # ranges still land on this recording.
+            if tracker is not None:
+                tracker.stop()
+        self._on_status("recording_finished", user=user, file_path=output, format="ts")
+
+    def _start_participant_tracker(self, user, room_id):
+        """Best-effort: any failure only means no guest names for this live."""
+        if not self._track_participants:
+            return None
+        try:
+            tracker = ParticipantTracker(
+                TikTokAPI(proxy=None, cookies=self._cookies),
+                room_id,
+                lambda snapshot: self._on_status(
+                    "participants", user=user, participants=snapshot
+                ),
+            )
+            tracker.start()
+            return tracker
+        except Exception as e:
+            logger.warning(f"Guest name tracking not started: {e}")
+            return None
+
+    def _record_stream(self, user, room_id, live_urls, output):
         min_stream_bytes = 4096
         for index, live_url in enumerate(live_urls, start=1):
             if self.duration:
@@ -322,7 +355,6 @@ class TikTokRecorder:
             raise LiveNotFound(TikTokError.RETRIEVE_LIVE_URL)
 
         logger.info(f"Recording finished: {Path(output).resolve()}\n")
-        self._on_status("recording_finished", user=user, file_path=output, format="ts")
 
     def check_country_blacklisted(self):
         is_blacklisted = self.tiktok.is_country_blacklisted()

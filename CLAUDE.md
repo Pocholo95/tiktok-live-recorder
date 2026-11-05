@@ -68,6 +68,17 @@ copies of the `*.example` files.
   downloaded to `OUTPUT_DIR/avatars/` (TikTok CDN URLs expire), row in the
   `profiles` table, served by `/avatars/{username}`. The `avatar` macro
   shows the initial underneath and drops the <img> on error.
+- Guest/co-host names (best-effort, hub mode only): `core/participants.py`
+  polls room info every 30 s while recording (`link_mic.rival_anchor_id`
+  for a linked co-host, `linked_user_list` / `show_user_list` for
+  multi-guest - the latter not yet seen populated in a real capture) and
+  turns ids into handles via the `tiktok.com/share/user/<id>` redirect.
+  Age-restricted lives need `sessionid_ss` in cookies.json. Any failure
+  only drops the names; it must never affect the recording. Time ranges
+  go to `recording_participants`; the convert command can burn them in
+  with `drawtext` (single-file mode only).
+- `src/cookies.json` is marked `git update-index --skip-worktree` on the
+  user's machine because it holds their TikTok session. Never commit it.
 - Live notices go to a Discord webhook: `notify/discord_webhook.py`. The
   URL lives in hub.db (`settings` table via `db/settings_repo.py`, key
   `discord_webhook_url`), not in a mounted JSON. The per-channel bell is

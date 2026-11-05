@@ -823,8 +823,45 @@ kbd {
 .guest { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .guest:last-child { border-bottom: none; }
 .guest .mono { margin-left: auto; }
-.cmd-names { margin-bottom: 0.75rem; flex-wrap: wrap; }
-.cmd-names.is-disabled { opacity: 0.45; }
+.guest.is-now { background: rgba(79, 140, 255, 0.1); border-radius: 6px; padding-left: 0.4rem; padding-right: 0.4rem; }
+
+.on-screen {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.on-screen-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.on-screen-people { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+
+.on-screen-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.6rem 0.15rem 0.2rem;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.on-screen-chip:hover { border-color: var(--accent); }
+.on-screen-chip.is-creator { border-color: rgba(79, 140, 255, 0.5); }
+.on-screen-with { font-size: 0.8rem; color: var(--muted); }
 
 .interval-edit { display: inline-flex; align-items: center; gap: 0.35rem; }
 .interval-input { width: 4.5rem; }

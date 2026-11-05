@@ -28,7 +28,7 @@
     </div>
     <ul class="guests">
       {% for p in participants %}
-      <li class="guest">
+      <li class="guest" data-guest data-start="{{ p.start_seconds }}" data-end="{{ p.end_seconds if p.end_seconds is not none else '' }}">
         {{ avatar(p.username, "xs") }}
         <a class="creator-link" href="https://www.tiktok.com/@{{ p.username }}" target="_blank" rel="noopener">@{{ p.username }}</a>
         <span class="mono muted">{{ p.start_seconds | hhmmss }} → {{ (p.end_seconds | hhmmss) if p.end_seconds is not none else ("en curso" if r.status == "recording" else "final") }}</span>

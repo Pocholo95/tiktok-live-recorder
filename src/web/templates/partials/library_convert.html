@@ -1,6 +1,5 @@
 {% set raw_name = r.file_path | basename %}
-<section class="workflow" id="convert-workflow" data-recording-id="{{ r.id }}" data-raw-name="{{ raw_name }}"
-  data-creator="{{ r.username }}" data-guests='{{ participants | tojson }}'>
+<section class="workflow" id="convert-workflow" data-recording-id="{{ r.id }}" data-raw-name="{{ raw_name }}">
   <ol class="steps">
     <li class="step">
       <div class="step-num">1</div>
@@ -47,12 +46,6 @@
             </select>
           </label>
         </div>
-
-        <label class="filter-checkbox cmd-names">
-          <input type="checkbox" data-cmd-flag="names" checked>
-          Poner los @ en el video
-          <span class="muted">(@{{ r.username }}{% if participants %} + {{ participants | map(attribute="username") | unique | list | length }} invitado{{ "s" if (participants | map(attribute="username") | unique | list | length) != 1 else "" }}{% endif %}, arriba a la izquierda)</span>
-        </label>
 
         <div class="tabs" role="tablist">
           <button type="button" class="tab active" data-cmd-scope="file">Este archivo</button>
@@ -118,41 +111,14 @@
     return o;
   }
 
-  const creator = root.dataset.creator;
-  let guests = [];
-  try { guests = JSON.parse(root.dataset.guests || "[]"); } catch (e) { guests = []; }
-  const namesBox = root.querySelector('[data-cmd-flag="names"]');
-
-  // One drawtext per label: the creator always, each guest only while they
-  // were linked in (their own row, in order of first appearance). Arial Bold
-  // from Windows avoids ffmpeg's fontconfig errors on Windows builds.
-  function nameFilters() {
-    const font = "fontfile='C\\:/Windows/Fonts/arialbd.ttf'";
-    const style = "fontcolor=white:fontsize=h*0.026:x=w*0.03:box=1:boxcolor=black@0.5:boxborderw=8";
-    const row = (i) => `y=h*0.03+${i}*h*0.045`;
-    const parts = [`drawtext=${font}:text='@${creator}':${style}:${row(0)}`];
-    const rows = {};
-    guests.forEach((g) => {
-      if (!(g.username in rows)) rows[g.username] = Object.keys(rows).length + 1;
-      const end = g.end_seconds == null ? 999999 : g.end_seconds;
-      parts.push(
-        `drawtext=${font}:text='+ @${g.username}':${style}:${row(rows[g.username])}` +
-        `:enable='between(t,${g.start_seconds},${end})'`
-      );
-    });
-    return parts.join(",");
-  }
-
   function buildArgs(o) {
     const [w, h] = o.size.split("x");
     const q = QUALITY[o.encoder][o.quality];
     const video = o.encoder === "libx264"
       ? `-c:v libx264 -preset veryfast -crf ${q}`
       : `-c:v ${o.encoder} -preset p5 -rc vbr -cq ${q} -b:v 0`;
-    // Names are per-recording, so only in single-file mode.
-    const names = scope === "file" && namesBox.checked ? `,${nameFilters()}` : "";
     const vf = `scale=${w}:${h}:force_original_aspect_ratio=decrease,` +
-      `pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30${names},format=yuv420p`;
+      `pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p`;
     return {
       pre: "-hide_banner -fflags +genpts+discardcorrupt",
       post: `-vf "${vf}" -af "aresample=async=1:first_pts=0" ${video} -g 60 ` +
@@ -169,14 +135,12 @@
     root.querySelectorAll("[data-cmd-scope]").forEach((t) => {
       t.classList.toggle("active", t.dataset.cmdScope === scope);
     });
-    namesBox.closest("label").classList.toggle("is-disabled", scope !== "file");
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...o, scope }));
     } catch (e) { /* ignore */ }
   }
 
   selects.forEach((s) => s.addEventListener("change", render));
-  namesBox.addEventListener("change", render);
   root.querySelectorAll("[data-cmd-scope]").forEach((t) => {
     t.addEventListener("click", () => { scope = t.dataset.cmdScope; render(); });
   });

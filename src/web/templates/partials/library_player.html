@@ -2,6 +2,14 @@
   <video id="clip-video" controls preload="metadata" class="clip-video" poster="/media/{{ selected_recording.id }}/thumbnail">
     <source src="/media/{{ selected_recording.id }}" type="video/mp4">
   </video>
+  {% if participants %}
+  <div class="on-screen" id="on-screen"
+    data-creator="{{ selected_recording.username }}"
+    data-guests='{{ participants | tojson }}'>
+    <span class="on-screen-label">En pantalla</span>
+    <div class="on-screen-people" id="on-screen-people"></div>
+  </div>
+  {% endif %}
 </section>
 
 <section class="panel">
@@ -53,6 +61,82 @@
 </section>
 
 <script>
+(function () {
+  // "En pantalla": who was linked in with the creator at the current
+  // playback time. Names come from recording_participants (seconds since
+  // the recording started), so they follow seeking and scrubbing too.
+  const bar = document.getElementById("on-screen");
+  const video = document.getElementById("clip-video");
+  if (!bar || !video) return;
+
+  const creator = bar.dataset.creator;
+  let guests = [];
+  try { guests = JSON.parse(bar.dataset.guests || "[]"); } catch (e) { guests = []; }
+  const people = document.getElementById("on-screen-people");
+
+  // Same formula as web.formatting.avatar_hue, so colors match the rest.
+  function hue(name) {
+    let total = 0;
+    for (let i = 0; i < name.length; i++) total += name.charCodeAt(i) * (i + 1);
+    return total % 360;
+  }
+
+  function chip(name, isCreator) {
+    const el = document.createElement("a");
+    el.className = "on-screen-chip" + (isCreator ? " is-creator" : "");
+    el.href = `https://www.tiktok.com/@${name}`;
+    el.target = "_blank";
+    el.rel = "noopener";
+    const av = document.createElement("span");
+    av.className = "avatar avatar-xs";
+    av.style.setProperty("--hue", hue(name));
+    av.textContent = name.charAt(0).toUpperCase();
+    const img = document.createElement("img");
+    img.src = `/avatars/${encodeURIComponent(name)}`;
+    img.alt = "";
+    img.onerror = () => img.remove();
+    av.appendChild(img);
+    el.appendChild(av);
+    el.appendChild(document.createTextNode("@" + name));
+    return el;
+  }
+
+  let shown = null;
+  function update() {
+    const t = video.currentTime || 0;
+    const now = [];
+    guests.forEach((g) => {
+      const end = g.end_seconds == null ? Infinity : g.end_seconds;
+      if (t >= g.start_seconds && t < end && !now.includes(g.username)) now.push(g.username);
+    });
+    const key = now.join(",");
+    if (key === shown) return;
+    shown = key;
+
+    people.replaceChildren(chip(creator, true));
+    if (now.length) {
+      const sep = document.createElement("span");
+      sep.className = "on-screen-with";
+      sep.textContent = "con";
+      people.appendChild(sep);
+      now.forEach((name) => people.appendChild(chip(name, false)));
+    } else {
+      const solo = document.createElement("span");
+      solo.className = "on-screen-with";
+      solo.textContent = "sin invitados ahora";
+      people.appendChild(solo);
+    }
+    document.querySelectorAll(".guest[data-guest]").forEach((li) => {
+      const start = parseFloat(li.dataset.start);
+      const end = li.dataset.end === "" ? Infinity : parseFloat(li.dataset.end);
+      li.classList.toggle("is-now", t >= start && t < end);
+    });
+  }
+
+  ["timeupdate", "seeked", "loadedmetadata"].forEach((ev) => video.addEventListener(ev, update));
+  update();
+})();
+
 (function () {
   const video = document.getElementById("clip-video");
   const sliderEl = document.getElementById("range-slider");

@@ -380,24 +380,26 @@ def test_toggle_channel_notify(client, app):
     assert "bell on" in response.text
 
 
-def test_library_shows_guests_in_sidebar_panel_and_command(client, app):
+def test_library_shows_guests_in_sidebar_panel_and_player(client, app):
     from db import participants_repo
 
     conn = get_connection(app.state.db_path)
     channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
     raw_id = _completed(conn, channel_id, "/output/raw.ts", "ts")
-    participants_repo.replace_for_recording(
-        conn,
-        raw_id,
-        [{"username": "os_grce", "start_seconds": 75, "end_seconds": 300}],
-    )
+    ready_id = _completed(conn, channel_id, "/output/ready.mp4", "mp4")
+    guests = [{"username": "os_grce", "start_seconds": 75, "end_seconds": 300}]
+    participants_repo.replace_for_recording(conn, raw_id, guests)
+    participants_repo.replace_for_recording(conn, ready_id, guests)
 
-    text = client.get(f"/library?recording_id={raw_id}").text
+    raw = client.get(f"/library?recording_id={raw_id}").text
+    assert "con @os_grce" in raw  # sidebar
+    assert "00:01:15 → 00:05:00" in raw  # guests panel
+    assert "drawtext" not in raw  # names are never burned into the video
+    assert 'id="on-screen"' not in raw  # no player for raw recordings
 
-    assert "con @os_grce" in text  # sidebar
-    assert "00:01:15 → 00:05:00" in text  # guests panel
-    assert "data-guests=" in text  # fed to the ffmpeg command builder
-    assert '"username": "os_grce"' in text
+    ready = client.get(f"/library?recording_id={ready_id}").text
+    assert 'id="on-screen"' in ready  # synced "En pantalla" bar
+    assert '"username": "os_grce"' in ready
 
 
 def test_update_channel_interval(client, app):

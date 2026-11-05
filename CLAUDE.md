@@ -75,8 +75,11 @@ copies of the `*.example` files.
   turns ids into handles via the `tiktok.com/share/user/<id>` redirect.
   Age-restricted lives need `sessionid_ss` in cookies.json. Any failure
   only drops the names; it must never affect the recording. Time ranges
-  go to `recording_participants`; the convert command can burn them in
-  with `drawtext` (single-file mode only).
+  go to `recording_participants` and are shown only in the web UI (the
+  "Con quién estuvo" panel and the "En pantalla" bar under the player,
+  synced to playback). The user decided against burning names into the
+  MP4: TikTok's layout changes made fixed positions land on the video or
+  the black bars unpredictably, and per-panel placement isn't knowable.
 - `src/cookies.json` is marked `git update-index --skip-worktree` on the
   user's machine because it holds their TikTok session. Never commit it.
 - Live notices go to a Discord webhook: `notify/discord_webhook.py`. The

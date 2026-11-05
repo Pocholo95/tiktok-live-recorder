@@ -18,6 +18,7 @@
       {{ avatar(c.username) }}
       <div class="creator-card-name">
         <strong>@{{ c.username }}</strong>
+        {% if profiles.get(c.username) and profiles[c.username].nickname %}<span class="nick">{{ profiles[c.username].nickname }}</span>{% endif %}
         <span class="muted">
           {% if live %}<span class="pill pill-live">En vivo</span>
           {% elif c.last_started_at %}último live {{ c.last_started_at | ago }}

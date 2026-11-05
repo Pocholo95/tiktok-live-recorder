@@ -224,3 +224,20 @@ def test_upload_converted_refuses_recording_still_in_progress(client, app, tmp_p
 def test_upload_converted_404_for_unknown_recording(client):
     response = client.put("/recordings/999/converted", content=b"x")
     assert response.status_code == 404
+
+
+def test_avatar_served_with_sniffed_type_and_misses_cached(client, app, tmp_path):
+    from db import profiles_repo
+
+    conn = get_connection(app.state.db_path)
+    avatar = tmp_path / "a.jpg"
+    avatar.write_bytes(b"RIFF\x10\x00\x00\x00WEBPVP8 fake")
+    profiles_repo.upsert(conn, "creator", nickname="C", avatar_path=str(avatar))
+
+    hit = client.get("/avatars/creator")
+    assert hit.status_code == 200
+    assert hit.headers["content-type"] == "image/webp"
+
+    miss = client.get("/avatars/nobody")
+    assert miss.status_code == 404
+    assert "max-age" in miss.headers["cache-control"]

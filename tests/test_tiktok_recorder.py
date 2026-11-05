@@ -214,3 +214,32 @@ def test_start_recording_tells_remuxer_about_reconnects(tmp_path, monkeypatch):
     remuxer = _FakeRemuxer.instances[-1]
     assert remuxer.connections == 2
     assert len(remuxer.chunks) == 2
+
+
+def test_report_profile_emits_avatar_from_last_lookup():
+    events = []
+    recorder = TikTokRecorder(
+        RecorderConfig(
+            mode=Mode.AUTOMATIC,
+            user="creator",
+            cookies={},
+            on_status=lambda phase, **data: events.append((phase, data)),
+        )
+    )
+
+    class _API:
+        last_user_info = {"avatarMedium": "https://cdn/a.webp", "nickname": "Creator"}
+
+    recorder.tiktok = _API()
+    recorder._report_profile()
+
+    assert events == [
+        (
+            "profile",
+            {
+                "user": "creator",
+                "avatar_url": "https://cdn/a.webp",
+                "nickname": "Creator",
+            },
+        )
+    ]

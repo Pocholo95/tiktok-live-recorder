@@ -5,11 +5,14 @@ from pathlib import Path
 from core.tiktok_recorder import TikTokRecorder
 from db import channels_repo, recordings_repo, settings_repo
 from notify import discord_webhook
+from supervisor import profiles
 from supervisor.thumbnails import generate_thumbnail
 from utils.enums import Mode
 from utils.logger_manager import logger
 from utils.recorder_config import RecorderConfig
 from utils.utils import read_cookies
+
+PROFILE_REFRESH_SECONDS = 6 * 3600
 
 
 class Worker:
@@ -24,6 +27,8 @@ class Worker:
         self.channel_id = channel_row["id"]
         self.username = channel_row["username"]
         self._recording_user = self.username
+        self._output_dir = output_dir
+        self._profile_saved_at = 0.0
 
         self._db_path = db_path
         self._get_connection = get_connection
@@ -87,6 +92,21 @@ class Worker:
 
         if phase == "offline":
             self._status_store.set(self.channel_id, phase="offline")
+            return
+
+        if phase == "profile":
+            # Arrives on every check (every few minutes); the avatar barely
+            # changes, so refresh it at most a few times a day.
+            if time.time() - self._profile_saved_at >= PROFILE_REFRESH_SECONDS:
+                self._profile_saved_at = time.time()
+                profiles.save_profile_in_background(
+                    self._db_path,
+                    self._get_connection,
+                    self._output_dir,
+                    data.get("user", self.username),
+                    data.get("avatar_url"),
+                    data.get("nickname"),
+                )
             return
 
         conn = self._get_connection(self._db_path)

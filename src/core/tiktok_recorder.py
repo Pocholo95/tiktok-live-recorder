@@ -115,6 +115,7 @@ class TikTokRecorder:
             try:
                 self._on_status("checking", user=self.user)
                 self.room_id = self.tiktok.get_room_id_from_user(self.user)
+                self._report_profile()
                 self.manual_mode()
 
             except (UserLiveError, LiveNotFound) as ex:
@@ -128,6 +129,21 @@ class TikTokRecorder:
             except (ConnectionError, RequestException, HTTPException):
                 logger.error(Error.CONNECTION_CLOSED_AUTOMATIC)
                 self._wait(TimeOut.CONNECTION_CLOSED * TimeOut.ONE_MINUTE)
+
+    def _report_profile(self):
+        info = getattr(self.tiktok, "last_user_info", None) or {}
+        avatar_url = (
+            info.get("avatarMedium")
+            or info.get("avatarThumb")
+            or info.get("avatarLarger")
+        )
+        if avatar_url or info.get("nickname"):
+            self._on_status(
+                "profile",
+                user=self.user,
+                avatar_url=avatar_url,
+                nickname=info.get("nickname"),
+            )
 
     def followers_mode(self):
         active_recordings = {}  # follower -> Thread

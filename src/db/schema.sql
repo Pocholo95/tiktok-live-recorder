@@ -48,3 +48,12 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- Creator profile data captured from TikTok's user/room lookup. The avatar
+-- is downloaded under OUTPUT_DIR/avatars (TikTok's CDN URLs expire).
+CREATE TABLE IF NOT EXISTS profiles (
+    username TEXT PRIMARY KEY,
+    nickname TEXT,
+    avatar_path TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

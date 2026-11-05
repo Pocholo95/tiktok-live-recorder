@@ -11,7 +11,7 @@
 {%- endmacro %}
 
 {% macro avatar(username, size="md") -%}
-  <span class="avatar avatar-{{ size }}" style="--hue: {{ username | hue }}" aria-hidden="true">{{ username[:1] | upper }}</span>
+  <span class="avatar avatar-{{ size }}" style="--hue: {{ username | hue }}" aria-hidden="true">{{ username[:1] | upper }}<img src="/avatars/{{ username | urlencode }}" alt="" loading="lazy" onerror="this.remove()"></span>
 {%- endmacro %}
 
 {% macro stat_tiles(totals, disk) -%}

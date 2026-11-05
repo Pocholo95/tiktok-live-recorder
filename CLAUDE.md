@@ -61,6 +61,13 @@ copies of the `*.example` files.
   (`recordings_repo.creator_summaries`), so creators whose channel was
   deleted still show up. Timestamps in the DB are UTC (`datetime('now')`);
   the `ago` filter renders relative times.
+- Creator pictures/display names come for free from the room-id lookup
+  (`TikTokAPI.last_user_info`, signed via tikrec.com - the original
+  project's own signing service). The recorder emits a `profile` status,
+  the worker saves it at most every 6 h (`supervisor/profiles.py`): avatar
+  downloaded to `OUTPUT_DIR/avatars/` (TikTok CDN URLs expire), row in the
+  `profiles` table, served by `/avatars/{username}`. The `avatar` macro
+  shows the initial underneath and drops the <img> on error.
 - Live notices go to a Discord webhook: `notify/discord_webhook.py`. The
   URL lives in hub.db (`settings` table via `db/settings_repo.py`, key
   `discord_webhook_url`), not in a mounted JSON. The per-channel bell is

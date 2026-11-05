@@ -20,6 +20,7 @@ class TikTokAPI:
         self.API_URL = "https://www.tiktok.com/api-live/user/room/"
         self.EULER_API = "https://tiktok.eulerstream.com"
         self.TIKREC_API = "https://tikrec.com"
+        self.last_user_info = {}
 
         self.http_client = HttpClient(proxy, cookies).req
         self._http_client_stream = HttpClient(proxy, cookies).req_stream
@@ -216,7 +217,11 @@ class TikTokAPI:
             raise UserLiveError(TikTokError.WAF_BLOCKED)
 
         data = response.json()
-        return (data.get("data") or {}).get("user", {}).get("roomId")
+        user_info = (data.get("data") or {}).get("user", {}) or {}
+        # Same response carries the profile (avatar, display name) - keep it
+        # so the hub can show creator pictures without another request.
+        self.last_user_info = user_info
+        return user_info.get("roomId")
 
     def get_followers_list(self, sec_uid) -> list:
         """

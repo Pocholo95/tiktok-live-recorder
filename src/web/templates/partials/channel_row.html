@@ -1,5 +1,6 @@
+{% from "partials/macros.html" import avatar %}
 <tr id="channel-row-{{ channel.id }}">
-  <td><a class="creator-link" href="/creators/{{ channel.username }}">@{{ channel.username }}</a></td>
+  <td><a class="creator-link user-cell" href="/creators/{{ channel.username }}">{{ avatar(channel.username, "sm") }}@{{ channel.username }}</a></td>
   <td>{{ channel.mode }}</td>
   <td>{{ channel.automatic_interval }} min</td>
   <td>

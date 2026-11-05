@@ -5,9 +5,9 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
-from db import recordings_repo
+from db import profiles_repo, recordings_repo
 from db.database import get_connection
 from supervisor.thumbnails import generate_thumbnail
 from utils.logger_manager import logger
@@ -263,3 +263,32 @@ async def upload_converted(recording_id: int, request: Request):
         _finalize_upload, db_path, recording_id, part_path, final_path
     )
     return JSONResponse({"detail": message}, status_code=status_code)
+
+
+@router.get("/avatars/{username}")
+def get_avatar(username: str, db=Depends(get_db)):
+    """
+    Creator profile picture saved by the recorder. Looked up by username in
+    the DB (never a client-supplied path). Misses are cached briefly too, so
+    pages that poll (the dashboard) don't re-request every few seconds.
+    """
+    profile = profiles_repo.get(db, username.lstrip("@"))
+    path = Path(profile["avatar_path"]) if profile and profile["avatar_path"] else None
+    if path is None or not path.is_file():
+        return Response(status_code=404, headers={"Cache-Control": "max-age=600"})
+    return FileResponse(
+        path,
+        media_type=_image_type(path),
+        headers={"Cache-Control": "max-age=3600"},
+    )
+
+
+def _image_type(path):
+    """TikTok serves avatars as WebP or JPEG regardless of the URL - sniff it."""
+    with open(path, "rb") as f:
+        head = f.read(12)
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image/webp"
+    if head[1:4] == b"PNG":
+        return "image/png"
+    return "image/jpeg"

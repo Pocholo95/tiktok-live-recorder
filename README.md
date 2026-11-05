@@ -141,6 +141,11 @@ Browsers can't play `.ts`, so the library walks you through:
    only then replaces the raw file, which is deleted. The clip editor is
    enabled from then on.
 
+Creator profile pictures and display names are picked up from the same
+TikTok lookup the recorder already does on every check (no extra
+requests), saved under `OUTPUT_DIR/avatars/` and refreshed every few hours.
+They appear after a channel's first check.
+
 ### Discord live notices
 
 Settings → *Avisos por Discord*: paste a Discord webhook URL (Server

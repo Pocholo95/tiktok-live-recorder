@@ -8,6 +8,7 @@
   {{ avatar(username, "lg") }}
   <div class="creator-head-info">
     <h1>@{{ username }}
+      {% if profile and profile.nickname %}<span class="creator-nick">{{ profile.nickname }}</span>{% endif %}
       {% if channel and channel.phase == "recording" %}<span class="pill pill-live">En vivo</span>{% endif %}
     </h1>
     <p class="muted">

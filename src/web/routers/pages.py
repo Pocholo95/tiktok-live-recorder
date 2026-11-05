@@ -5,7 +5,13 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
-from db import channels_repo, clip_marks_repo, recordings_repo, settings_repo
+from db import (
+    channels_repo,
+    clip_marks_repo,
+    profiles_repo,
+    recordings_repo,
+    settings_repo,
+)
 from db.database import get_connection
 from utils.enums import Mode
 from web.deps import get_db, get_supervisor, get_templates
@@ -559,6 +565,7 @@ def creators_index(
         "creators.html",
         {
             "creators": creators,
+            "profiles": profiles_repo.all_by_username(db),
             "totals": recordings_repo.totals(db),
             "disk": _disk_usage(request),
         },
@@ -597,6 +604,7 @@ def creator_detail(
         "creator.html",
         {
             "username": username,
+            "profile": profiles_repo.get(db, username),
             "summary": summary,
             "channel": _channel_view(channel, supervisor) if channel else None,
             "recordings": recordings,

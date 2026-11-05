@@ -168,3 +168,24 @@ def test_worker_skips_notices_without_webhook(tmp_path, monkeypatch):
     worker.join(timeout=2)
 
     assert sent == []
+
+
+def test_worker_throttles_profile_saves(tmp_path, monkeypatch):
+    saved = []
+    monkeypatch.setattr(worker_module, "read_cookies", lambda: {})
+    monkeypatch.setattr(
+        worker_module.profiles, "save_profile_in_background", lambda *a: saved.append(a)
+    )
+
+    db_path = str(tmp_path / "hub.db")
+    init_db(db_path)
+    conn = get_connection(db_path)
+    worker = worker_module.Worker(
+        _channel_row(conn), db_path, get_connection, tmp_path, ChannelStatusStore()
+    )
+
+    for _ in range(3):
+        worker._on_status("profile", user="creator", avatar_url="u", nickname="n")
+
+    assert len(saved) == 1
+    assert saved[0][3:] == ("creator", "u", "n")

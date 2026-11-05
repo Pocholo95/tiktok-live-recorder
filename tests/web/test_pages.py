@@ -398,3 +398,18 @@ def test_library_shows_guests_in_sidebar_panel_and_command(client, app):
     assert "00:01:15 → 00:05:00" in text  # guests panel
     assert "data-guests=" in text  # fed to the ffmpeg command builder
     assert '"username": "os_grce"' in text
+
+
+def test_update_channel_interval(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+
+    response = client.post(f"/channels/{channel_id}/interval", data={"minutes": "12"})
+    assert response.status_code == 200
+    assert 'value="12"' in response.text
+    assert channels_repo.get(conn, channel_id)["automatic_interval"] == 12
+
+    # Invalid values are ignored, keeping the previous one.
+    client.post(f"/channels/{channel_id}/interval", data={"minutes": "0"})
+    client.post(f"/channels/{channel_id}/interval", data={"minutes": "abc"})
+    assert channels_repo.get(conn, channel_id)["automatic_interval"] == 12

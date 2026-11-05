@@ -22,7 +22,8 @@ class TikTokRecorder:
         self.user = config.user
         self.room_id = config.room_id
         self.mode = config.mode
-        self.automatic_interval = config.automatic_interval
+        self._automatic_interval = config.automatic_interval
+        self._automatic_interval_getter = config.automatic_interval_getter
         self.duration = config.duration
         self.output = config.output
         self.bitrate = config.bitrate
@@ -35,6 +36,27 @@ class TikTokRecorder:
         # Guest names are a hub feature (they're shown in the library); the
         # plain CLI has nowhere to put them, so don't poll TikTok for them.
         self._track_participants = config.on_status is not None
+        self._participants_interval = config.participants_interval
+
+    @property
+    def automatic_interval(self):
+        """
+        Minutes between live checks. In the hub this is re-read from the
+        channel's DB row before every wait, so editing it in the dashboard
+        takes effect without restarting the worker (or cutting a recording).
+        """
+        if self._automatic_interval_getter is not None:
+            try:
+                value = int(self._automatic_interval_getter())
+                if value >= 1:
+                    return value
+            except Exception:
+                pass
+        return self._automatic_interval
+
+    @automatic_interval.setter
+    def automatic_interval(self, value):
+        self._automatic_interval = value
 
     def _stopped(self) -> bool:
         return self._stop_event is not None and self._stop_event.is_set()
@@ -252,6 +274,11 @@ class TikTokRecorder:
                 room_id,
                 lambda snapshot: self._on_status(
                     "participants", user=user, participants=snapshot
+                ),
+                **(
+                    {"interval": self._participants_interval}
+                    if self._participants_interval
+                    else {}
                 ),
             )
             tracker.start()

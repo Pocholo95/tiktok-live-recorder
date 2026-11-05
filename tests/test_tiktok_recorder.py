@@ -316,3 +316,21 @@ def test_tracker_startup_failure_does_not_stop_recording(tmp_path, monkeypatch):
     recorder.start_recording("creator", "1234567890")
 
     assert events == ["recording_started", "recording_finished"]
+
+
+def test_automatic_interval_is_read_live_from_getter():
+    current = [5]
+    recorder = TikTokRecorder(
+        RecorderConfig(
+            mode=Mode.AUTOMATIC,
+            user="creator",
+            cookies={},
+            automatic_interval=5,
+            automatic_interval_getter=lambda: current[0],
+        )
+    )
+    assert recorder.automatic_interval == 5
+    current[0] = 15  # edited in the dashboard while running
+    assert recorder.automatic_interval == 15
+    current[0] = None  # channel row gone / unreadable -> keep last config
+    assert recorder.automatic_interval == 5

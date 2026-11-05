@@ -139,3 +139,21 @@ def test_discord_webhook_saved_validated_and_cleared(client, app):
 def test_discord_test_button_reports_missing_webhook(client):
     response = client.post("/settings/discord/test")
     assert "Falta configurar la URL del webhook" in response.text
+
+
+def test_participants_interval_saved_and_validated(client, app):
+    from db import settings_repo
+    from db.database import get_connection
+
+    assert 'name="seconds" value="30"' in client.get("/settings").text
+
+    bad = client.post("/settings/participants", data={"seconds": "3"})
+    assert "entre 10 y 600" in bad.text
+
+    ok = client.post(
+        "/settings/participants", data={"seconds": "45"}, follow_redirects=False
+    )
+    assert ok.status_code == 303
+    conn = get_connection(app.state.db_path)
+    assert settings_repo.get(conn, "participants_poll_seconds") == "45"
+    assert 'name="seconds" value="45"' in client.get("/settings").text

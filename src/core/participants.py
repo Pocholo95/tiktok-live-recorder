@@ -20,6 +20,20 @@ import time
 from utils.logger_manager import logger
 
 POLL_SECONDS = 30
+MIN_POLL_SECONDS = 10
+MAX_POLL_SECONDS = 600
+SETTING_KEY = "participants_poll_seconds"
+
+
+def clamp_interval(value):
+    """Valid poll interval in seconds, falling back to the default."""
+    try:
+        seconds = int(value)
+    except (TypeError, ValueError):
+        return POLL_SECONDS
+    return max(MIN_POLL_SECONDS, min(MAX_POLL_SECONDS, seconds))
+
+
 _ID_KEYS = ("id", "id_str", "user_id", "userId", "linker_id", "uid")
 _USER_ID = re.compile(r"^\d{6,20}$")
 _HANDLE_FROM_URL = re.compile(r"tiktok\.com/@([A-Za-z0-9._]+)")
@@ -85,6 +99,8 @@ class ParticipantTracker:
     time ranges (seconds since recording start) they were linked in.
     `on_change(snapshot)` gets the full list whenever it changes:
     [{"username", "start_seconds", "end_seconds" (None while present)}].
+    `interval` is seconds, or a callable returning them - re-read before
+    every wait, so a change in Settings applies to lives already recording.
     """
 
     def __init__(self, api, room_id, on_change, interval=POLL_SECONDS, clock=None):
@@ -120,10 +136,17 @@ class ParticipantTracker:
     def _elapsed(self):
         return round(self._clock() - self._started, 1)
 
+    def _current_interval(self):
+        try:
+            value = self._interval() if callable(self._interval) else self._interval
+        except Exception:
+            value = None
+        return clamp_interval(value)
+
     def _run(self):
         while not self._stop.is_set():
             self.poll_once()
-            self._stop.wait(self._interval)
+            self._stop.wait(self._current_interval())
 
     def poll_once(self):
         try:

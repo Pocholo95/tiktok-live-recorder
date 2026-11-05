@@ -30,7 +30,7 @@
       <th></th>
     </tr>
   </thead>
-  <tbody id="channels-body" hx-get="/partials/channels" hx-trigger="load, every 3s" hx-swap="innerHTML">
+  <tbody id="channels-body" hx-get="/partials/channels" hx-trigger="load, every 3s [!document.activeElement || !document.activeElement.classList.contains('interval-input')]" hx-swap="innerHTML">
     {% include "partials/channel_rows.html" %}
   </tbody>
 </table>

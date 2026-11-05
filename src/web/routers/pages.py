@@ -125,6 +125,34 @@ def toggle_channel(
     )
 
 
+@router.post("/channels/{channel_id}/interval", response_class=HTMLResponse)
+def update_channel_interval(
+    request: Request,
+    channel_id: int,
+    minutes: str = Form(""),
+    db=Depends(get_db),
+    supervisor=Depends(get_supervisor),
+    templates=Depends(get_templates),
+):
+    # Not a supervisor restart trigger: the worker re-reads it before each
+    # wait, so this never cuts an ongoing recording.
+    try:
+        value = int(minutes)
+    except ValueError:
+        value = None
+    if value is not None and 1 <= value <= 1440:
+        channels_repo.update(db, channel_id, automatic_interval=value)
+
+    row = channels_repo.get(db, channel_id)
+    if row is None:
+        return PlainTextResponse("")
+    return templates.TemplateResponse(
+        request,
+        "partials/channel_row.html",
+        {"channel": _channel_view(row, supervisor)},
+    )
+
+
 @router.delete("/channels/{channel_id}")
 def delete_channel(channel_id: int, db=Depends(get_db)):
     channels_repo.delete(db, channel_id)
@@ -466,12 +494,46 @@ def update_telegram(
 def _discord_context(request):
     from notify import discord_webhook
 
+    from core import participants
+
     conn = get_connection(request.app.state.db_path)
     try:
         url = settings_repo.get(conn, discord_webhook.SETTING_KEY)
+        poll = settings_repo.get(conn, participants.SETTING_KEY)
     finally:
         conn.close()
-    return {"discord_status": _mask(url) if url else None}
+    return {
+        "discord_status": _mask(url) if url else None,
+        "participants_poll_seconds": participants.clamp_interval(poll),
+        "participants_min": participants.MIN_POLL_SECONDS,
+        "participants_max": participants.MAX_POLL_SECONDS,
+    }
+
+
+@router.post("/settings/participants", response_class=HTMLResponse)
+def update_participants_interval(
+    request: Request,
+    seconds: str = Form(""),
+    db=Depends(get_db),
+    templates=Depends(get_templates),
+):
+    from core import participants
+
+    try:
+        value = int(seconds)
+    except ValueError:
+        value = None
+    if value is None or not (
+        participants.MIN_POLL_SECONDS <= value <= participants.MAX_POLL_SECONDS
+    ):
+        return _settings_error(
+            request,
+            templates,
+            f"El intervalo tiene que ser un número entre "
+            f"{participants.MIN_POLL_SECONDS} y {participants.MAX_POLL_SECONDS} segundos.",
+        )
+    settings_repo.set(db, participants.SETTING_KEY, str(value))
+    return RedirectResponse(url="/settings?saved=participants", status_code=303)
 
 
 @router.post("/settings/discord", response_class=HTMLResponse)

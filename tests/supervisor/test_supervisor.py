@@ -86,13 +86,35 @@ def test_reconcile_restarts_worker_when_channel_config_changes(tmp_path, monkeyp
     sup._reconcile_once()
     first_worker = _FakeWorker.instances[0]
 
-    channels_repo.update(conn, channel_id, automatic_interval=10)
+    channels_repo.update(conn, channel_id, proxy="http://proxy:8080")
     sup._reconcile_once()
 
     assert first_worker.stopped is True
     assert len(_FakeWorker.instances) == 2
     assert _FakeWorker.instances[1].started is True
     assert sup._workers[channel_id][0] is _FakeWorker.instances[1]
+
+
+def test_interval_or_notice_changes_do_not_restart_worker(tmp_path, monkeypatch):
+    # The worker re-reads these from the DB, so a restart (which would cut
+    # an ongoing recording) is never needed for them.
+    _FakeWorker.instances = []
+    monkeypatch.setattr(supervisor_module, "_Worker", _FakeWorker)
+
+    db_path = str(tmp_path / "hub.db")
+    init_db(db_path)
+    conn = get_connection(db_path)
+    channel_id = channels_repo.insert(
+        conn, username="alice", mode=Mode.AUTOMATIC, automatic_interval=5
+    )
+
+    sup = supervisor_module.ChannelSupervisor(db_path, tmp_path)
+    sup._reconcile_once()
+    channels_repo.update(conn, channel_id, automatic_interval=10, use_telegram=1)
+    sup._reconcile_once()
+
+    assert len(_FakeWorker.instances) == 1
+    assert _FakeWorker.instances[0].stopped is not True
 
 
 def test_reconcile_prunes_workers_that_died_on_their_own(tmp_path, monkeypatch):

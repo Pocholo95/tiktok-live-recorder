@@ -2,6 +2,7 @@ import threading
 import time
 from pathlib import Path
 
+from core import participants
 from core.tiktok_recorder import TikTokRecorder
 from db import channels_repo, participants_repo, recordings_repo, settings_repo
 from notify import discord_webhook
@@ -47,6 +48,8 @@ class Worker:
             use_telegram=bool(channel_row["use_telegram"]),
             stop_event=self._stop_event,
             on_status=self._on_status,
+            participants_interval=self._participants_interval,
+            automatic_interval_getter=self._automatic_interval,
         )
         self._recorder = TikTokRecorder(config)
         self._thread = threading.Thread(
@@ -141,6 +144,21 @@ class Worker:
 
             elif phase == "recording_error":
                 self._fail_recording(conn, data.get("error", "unknown error"))
+        finally:
+            conn.close()
+
+    def _automatic_interval(self):
+        conn = self._get_connection(self._db_path)
+        try:
+            row = channels_repo.get(conn, self.channel_id)
+            return row["automatic_interval"] if row else None
+        finally:
+            conn.close()
+
+    def _participants_interval(self):
+        conn = self._get_connection(self._db_path)
+        try:
+            return settings_repo.get(conn, participants.SETTING_KEY)
         finally:
             conn.close()
 

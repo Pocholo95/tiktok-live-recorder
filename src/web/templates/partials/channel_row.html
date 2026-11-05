@@ -2,7 +2,19 @@
 <tr id="channel-row-{{ channel.id }}">
   <td><a class="creator-link user-cell" href="/creators/{{ channel.username }}">{{ avatar(channel.username, "sm") }}@{{ channel.username }}</a></td>
   <td>{{ channel.mode }}</td>
-  <td>{{ channel.automatic_interval }} min</td>
+  <td>
+    <label class="interval-edit" title="Minutos entre revisiones. Se aplica sin cortar una grabación en curso.">
+      <input
+        type="number" name="minutes" min="1" max="1440" step="1"
+        value="{{ channel.automatic_interval }}"
+        class="interval-input"
+        hx-post="/channels/{{ channel.id }}/interval"
+        hx-trigger="change"
+        hx-target="closest tr"
+        hx-swap="outerHTML">
+      <span class="muted">min</span>
+    </label>
+  </td>
   <td>
     <span class="status-badge status-{{ channel.phase }}">{{ channel.phase_label }}</span>
     {% if channel.detail %}<br><small>{{ channel.detail }}</small>{% endif %}

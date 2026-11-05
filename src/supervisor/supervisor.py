@@ -8,15 +8,14 @@ from supervisor.worker import Worker as _Worker
 from utils.logger_manager import logger
 
 # Fields that, if changed, should restart a channel's worker (e.g. a new
-# interval or proxy) rather than leaving the old one running with stale config.
+# proxy) rather than leaving the old one running with stale config.
+# automatic_interval and use_telegram (the Discord notices bell) are
+# deliberately absent: the worker re-reads both from the DB when it needs
+# them, so editing either never interrupts a recording.
 _TRACKED_FIELDS = (
     "username",
     "mode",
-    "automatic_interval",
     "proxy",
-    # use_telegram (the Discord notices bell) is deliberately absent: the
-    # worker reads it from the DB whenever it notifies, so toggling notices
-    # never interrupts a recording.
 )
 
 

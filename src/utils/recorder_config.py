@@ -24,3 +24,7 @@ class RecorderConfig:
     # for plain CLI usage, where the process itself is the unit of control.
     stop_event: Event | None = None
     on_status: Callable[..., None] | None = None
+    # Hub only: returns the guest-name poll interval (seconds) from Settings.
+    participants_interval: Callable[[], int] | None = None
+    # Hub only: returns the channel's current check interval (minutes).
+    automatic_interval_getter: Callable[[], int] | None = None

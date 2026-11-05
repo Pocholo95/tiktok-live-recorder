@@ -825,3 +825,6 @@ kbd {
 .guest .mono { margin-left: auto; }
 .cmd-names { margin-bottom: 0.75rem; flex-wrap: wrap; }
 .cmd-names.is-disabled { opacity: 0.45; }
+
+.interval-edit { display: inline-flex; align-items: center; gap: 0.35rem; }
+.interval-input { width: 4.5rem; }

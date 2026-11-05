@@ -85,6 +85,12 @@ copies of the `*.example` files.
   the legacy `use_telegram` column (name kept to avoid a migration); the
   worker reads it from the DB each time, and it is intentionally not a
   supervisor restart trigger.
+- Supervisor restart triggers are only `username`, `mode`, `proxy`
+  (`supervisor._TRACKED_FIELDS`). A restart stops the worker and cuts any
+  ongoing recording, so settings that can change mid-live are read live
+  instead: the channel's `automatic_interval` (recorder property backed by
+  `automatic_interval_getter`), the bell, and the guest poll interval
+  (`settings` key `participants_poll_seconds`, 10-600 s, default 30).
 - SQLite connections are per-call (`db.database.get_connection`). In
   `async` endpoints open them inside a `run_in_threadpool` function, never
   via the sync `get_db` dependency (different thread).

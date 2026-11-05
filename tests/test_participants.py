@@ -147,3 +147,30 @@ def test_tracker_without_any_guest_emits_nothing():
     tracker.poll_once()
     tracker.stop()
     assert snapshots == []
+
+
+def test_interval_is_read_live_and_clamped():
+    from core.participants import clamp_interval
+
+    assert clamp_interval(None) == 30
+    assert clamp_interval("abc") == 30
+    assert clamp_interval("2") == 10
+    assert clamp_interval(10_000) == 600
+
+    value = ["45"]
+    tracker = ParticipantTracker(
+        _Api([], {}), "room", lambda s: None, interval=lambda: value[0]
+    )
+    assert tracker._current_interval() == 45
+    value[0] = "120"  # changed in Settings while recording
+    assert tracker._current_interval() == 120
+
+    def broken():
+        raise RuntimeError("db locked")
+
+    assert (
+        ParticipantTracker(
+            _Api([], {}), "r", lambda s: None, interval=broken
+        )._current_interval()
+        == 30
+    )

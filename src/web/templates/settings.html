@@ -5,6 +5,7 @@
 
 {% if saved == "cookies" %}<p class="saved-banner">cookies.json actualizado.</p>{% endif %}
 {% if saved == "telegram" %}<p class="saved-banner">telegram.json actualizado.</p>{% endif %}
+{% if saved == "participants" %}<p class="saved-banner">Intervalo guardado: se aplica también a los lives que se están grabando.</p>{% endif %}
 {% if saved == "discord" %}<p class="saved-banner">Webhook de Discord guardado. Probalo con "Enviar aviso de prueba".</p>{% endif %}
 {% if saved == "discord-cleared" %}<p class="saved-banner">Webhook de Discord quitado: no se van a mandar avisos.</p>{% endif %}
 {% if saved == "discord-test" %}<p class="saved-banner">Aviso de prueba enviado: revisá el canal de Discord.</p>{% endif %}
@@ -28,6 +29,23 @@
     <input type="text" name="tt_target_idc" value="{{ tt_target_idc }}" placeholder="ej. useast2a">
   </label>
   <button type="submit">Guardar cookies</button>
+</form>
+
+<h2>Invitados en pantalla</h2>
+<p class="hint settings-intro">
+  Mientras graba, el hub revisa cada tanto quién está conectado con el creador
+  (co-host o invitados) para anotar sus @. Más corto = horarios más precisos,
+  pero más consultas a TikTok. Los lives con restricción de edad necesitan la
+  cookie <strong>sessionid_ss</strong> de arriba; si falta o venció, se graba igual
+  pero sin nombres.
+</p>
+<form method="post" action="/settings/participants" class="settings-form">
+  <label>
+    Revisar cada (segundos)
+    <span class="hint">entre {{ participants_min }} y {{ participants_max }} · recomendado 30</span>
+    <input type="number" name="seconds" value="{{ participants_poll_seconds }}" min="{{ participants_min }}" max="{{ participants_max }}" step="1" required>
+  </label>
+  <button type="submit">Guardar intervalo</button>
 </form>
 
 <h2>Avisos por Discord</h2>

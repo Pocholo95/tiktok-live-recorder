@@ -21,6 +21,7 @@ import time
 from utils.logger_manager import logger
 
 POLL_SECONDS = 30
+ACCESS_DENIED = 4003110  # room info refused: age-restricted, no working session
 MIN_POLL_SECONDS = 10
 MAX_POLL_SECONDS = 600
 SETTING_KEY = "participants_poll_seconds"
@@ -137,6 +138,7 @@ class ParticipantTracker:
         interval=POLL_SECONDS,
         clock=None,
         debug_path=None,
+        on_access_denied=None,
     ):
         self._api = api
         self._room_id = room_id
@@ -144,6 +146,8 @@ class ParticipantTracker:
         self._interval = interval
         self._clock = clock or time.monotonic
         self._debug_path = debug_path
+        self._on_access_denied = on_access_denied
+        self._access_denied_reported = False
         self._resolver = UsernameResolver(api.http_client)
         self._started = self._clock()
         self._stop = threading.Event()
@@ -191,6 +195,7 @@ class ParticipantTracker:
         try:
             room_data = self._api.get_room_data(self._room_id)
             if room_data is None:
+                self._report_access_denied()
                 raise RuntimeError(
                     "room info unavailable (age-restricted live without a "
                     "valid session cookie?)"
@@ -208,6 +213,17 @@ class ParticipantTracker:
             return
         self._write_debug(room_data, ids, resolved)
         self._update(set(resolved.values()))
+
+    def _report_access_denied(self):
+        code = getattr(self._api, "last_room_status_code", None)
+        if code != ACCESS_DENIED or self._access_denied_reported:
+            return
+        self._access_denied_reported = True  # once per recording is enough
+        if self._on_access_denied is not None:
+            try:
+                self._on_access_denied()
+            except Exception as e:
+                logger.warning(f"Could not report denied room access: {e}")
 
     def _write_debug(self, room_data, ids, resolved):
         if not self._debug_path or ids == self._last_ids:

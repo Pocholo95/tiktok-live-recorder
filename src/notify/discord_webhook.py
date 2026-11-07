@@ -142,3 +142,8 @@ def live_failed(webhook_url, username, error, recording_id=None):
         "color": _AMBER,
     }
     send_in_background(webhook_url, embed)
+
+
+def problem_embed(title, description):
+    """Health problems (not live notices): amber, no hub link needed."""
+    return {"title": f"⚠️ {title}", "description": description[:1500], "color": _AMBER}

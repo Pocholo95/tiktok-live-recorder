@@ -6,6 +6,7 @@
 {% if saved == "cookies" %}<p class="saved-banner">cookies.json actualizado.</p>{% endif %}
 {% if saved == "telegram" %}<p class="saved-banner">telegram.json actualizado.</p>{% endif %}
 {% if saved == "participants" %}<p class="saved-banner">Intervalo guardado: se aplica también a los lives que se están grabando.</p>{% endif %}
+{% if saved == "problem-alerts" %}<p class="saved-banner">Preferencia de avisos de problemas guardada.</p>{% endif %}
 {% if saved == "discord" %}<p class="saved-banner">Webhook de Discord guardado. Probalo con "Enviar aviso de prueba".</p>{% endif %}
 {% if saved == "discord-cleared" %}<p class="saved-banner">Webhook de Discord quitado: no se van a mandar avisos.</p>{% endif %}
 {% if saved == "discord-test" %}<p class="saved-banner">Aviso de prueba enviado: revisá el canal de Discord.</p>{% endif %}
@@ -30,6 +31,17 @@
   </label>
   <button type="submit">Guardar cookies</button>
 </form>
+{% if session_status %}
+<p class="session-health {{ 'is-bad' if session_problem else 'is-ok' }}">
+  {% if session_problem %}
+    ⚠️ TikTok rechazó la sesión <span title="{{ session_problem.when }} UTC">{{ session_problem.when | ago }}</span>
+    (live de @{{ session_problem.username }}): probablemente venció. Pegá una nueva arriba.
+  {% else %}
+    ✓ Sin problemas detectados con la sesión. Se comprueba en la práctica: si TikTok
+    la rechaza en un live con restricción de edad, aparece acá y te llega un aviso.
+  {% endif %}
+</p>
+{% endif %}
 
 <h2>Conversión automática</h2>
 <p class="hint settings-intro">
@@ -153,6 +165,20 @@
     <button type="submit" name="clear" value="1" class="button-danger">Quitar</button>
     {% endif %}
   </div>
+</form>
+
+<h2>Avisos de problemas</h2>
+<p class="hint settings-intro">
+  Al mismo webhook de Discord, sin depender de la campana de cada canal: sesión de
+  TikTok rechazada, un canal que lleva más de 30 min con error, o una grabación cuyo
+  archivo dejó de crecer por más de 5 min. Cada aviso se manda una sola vez por problema.
+</p>
+<form method="post" action="/settings/problem-alerts" class="settings-form">
+  <label class="filter-checkbox">
+    <input type="checkbox" name="enabled" value="1" {% if problem_alerts %}checked{% endif %} onchange="this.form.submit()">
+    Mandar avisos de problemas a Discord
+  </label>
+  {% if not discord_status %}<span class="hint">Primero configurá el webhook de arriba.</span>{% endif %}
 </form>
 
 <details class="settings-legacy">

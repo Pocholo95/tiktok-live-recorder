@@ -41,6 +41,12 @@ def main():
     )
     supervisor.start()
 
+    # Problem alerts (channel stuck in error, recording that stopped growing).
+    from db.database import get_connection
+    from supervisor.health import HealthMonitor
+
+    HealthMonitor(db_path, get_connection, supervisor.status).start()
+
     app = create_app(db_path, supervisor, output_dir)
 
     host = os.environ.get("HUB_HOST", "0.0.0.0")

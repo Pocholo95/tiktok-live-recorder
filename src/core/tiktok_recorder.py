@@ -276,6 +276,11 @@ class TikTokRecorder:
                     "participants", user=user, participants=snapshot
                 ),
                 debug_path=str(Path(output).with_suffix(".participants.jsonl")),
+                on_access_denied=lambda: self._on_status(
+                    "session_problem",
+                    user=user,
+                    has_session=bool((self._cookies or {}).get("sessionid_ss")),
+                ),
                 **(
                     {"interval": self._participants_interval}
                     if self._participants_interval

@@ -1,4 +1,6 @@
 import shutil
+from datetime import datetime, timezone
+import time
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -30,7 +32,57 @@ _PHASE_LABELS = {
 }
 
 
-def _channel_view(row, supervisor):
+def _live_info(db, channel_id, status):
+    """
+    What's happening in a channel's ongoing recording, for the dashboard:
+    how long it has been running, how big the file is, who is linked in
+    right now, and whether the health monitor saw it stall.
+    """
+    recording = db.execute(
+        """
+        SELECT * FROM recordings
+        WHERE channel_id = ? AND status = 'recording'
+        ORDER BY started_at DESC LIMIT 1
+        """,
+        (channel_id,),
+    ).fetchone()
+    if recording is None:
+        return None
+
+    elapsed = None
+    try:
+        started = datetime.strptime(recording["started_at"][:19], "%Y-%m-%d %H:%M:%S")
+        elapsed = max(
+            0,
+            (datetime.now(timezone.utc).replace(tzinfo=None) - started).total_seconds(),
+        )
+    except (TypeError, ValueError):
+        pass
+
+    size = None
+    try:
+        size = Path(recording["file_path"]).stat().st_size
+    except (OSError, TypeError):
+        pass
+
+    guests = [
+        p["username"]
+        for p in participants_repo.list_for_recording(db, recording["id"])
+        if p["end_seconds"] is None
+    ]
+    stalled_since = (status.get("flags") or {}).get("stalled_since")
+    return {
+        "recording_id": recording["id"],
+        "elapsed_seconds": elapsed,
+        "size_bytes": size,
+        "guests": list(dict.fromkeys(guests)),
+        "stalled_minutes": int((time.time() - stalled_since) / 60)
+        if stalled_since is not None
+        else None,
+    }
+
+
+def _channel_view(row, supervisor, db=None):
     status = supervisor.get_status(row["id"]) or {}
     default_phase = "stopped" if not row["enabled"] else "starting"
     phase = status.get("phase", default_phase)
@@ -45,11 +97,16 @@ def _channel_view(row, supervisor):
         "phase": phase,
         "phase_label": _PHASE_LABELS.get(phase, phase),
         "detail": status.get("detail"),
+        "live": _live_info(db, row["id"], status)
+        if db is not None and phase == "recording"
+        else None,
     }
 
 
 def _render_channels(request, db, supervisor, templates, template_name):
-    channels = [_channel_view(row, supervisor) for row in channels_repo.list_all(db)]
+    channels = [
+        _channel_view(row, supervisor, db) for row in channels_repo.list_all(db)
+    ]
     return templates.TemplateResponse(request, template_name, {"channels": channels})
 
 
@@ -121,7 +178,7 @@ def toggle_channel(
     return templates.TemplateResponse(
         request,
         "partials/channel_row.html",
-        {"channel": _channel_view(row, supervisor)},
+        {"channel": _channel_view(row, supervisor, db)},
     )
 
 
@@ -149,7 +206,7 @@ def update_channel_interval(
     return templates.TemplateResponse(
         request,
         "partials/channel_row.html",
-        {"channel": _channel_view(row, supervisor)},
+        {"channel": _channel_view(row, supervisor, db)},
     )
 
 
@@ -454,6 +511,15 @@ def update_cookies(
             "¿Está montado como volumen de solo lectura (:ro)?",
         )
 
+    if sessionid_ss.strip():
+        from supervisor import alerts
+
+        conn = get_connection(request.app.state.db_path)
+        try:
+            alerts.clear_session_problem(conn)
+        finally:
+            conn.close()
+
     return RedirectResponse(url="/settings?saved=cookies", status_code=303)
 
 
@@ -499,11 +565,14 @@ def _discord_context(request):
     from notify import discord_webhook
 
     from core import participants
+    from supervisor import alerts
 
     conn = get_connection(request.app.state.db_path)
     try:
         url = settings_repo.get(conn, discord_webhook.SETTING_KEY)
         poll = settings_repo.get(conn, participants.SETTING_KEY)
+        problem_alerts = alerts.enabled(conn)
+        session_problem = alerts.last_session_problem(conn)
     finally:
         conn.close()
     from web import convert
@@ -514,6 +583,17 @@ def _discord_context(request):
         "convert_qualities": convert.QUALITIES,
         "convert_defaults": convert.DEFAULTS,
         "discord_status": _mask(url) if url else None,
+        "problem_alerts": problem_alerts,
+        "session_problem": (
+            {
+                "when": time.strftime(
+                    "%Y-%m-%d %H:%M:%S", time.gmtime(session_problem[0])
+                ),
+                "username": session_problem[1],
+            }
+            if session_problem
+            else None
+        ),
         "participants_poll_seconds": participants.clamp_interval(poll),
         "participants_min": participants.MIN_POLL_SECONDS,
         "participants_max": participants.MAX_POLL_SECONDS,
@@ -544,6 +624,14 @@ def update_participants_interval(
         )
     settings_repo.set(db, participants.SETTING_KEY, str(value))
     return RedirectResponse(url="/settings?saved=participants", status_code=303)
+
+
+@router.post("/settings/problem-alerts", response_class=HTMLResponse)
+def update_problem_alerts(enabled: str = Form(""), db=Depends(get_db)):
+    from supervisor import alerts
+
+    settings_repo.set(db, alerts.ENABLED_KEY, "1" if enabled else "0")
+    return RedirectResponse(url="/settings?saved=problem-alerts", status_code=303)
 
 
 @router.post("/settings/discord", response_class=HTMLResponse)
@@ -605,7 +693,7 @@ def toggle_channel_notify(
     return templates.TemplateResponse(
         request,
         "partials/channel_row.html",
-        {"channel": _channel_view(row, supervisor)},
+        {"channel": _channel_view(row, supervisor, db)},
     )
 
 

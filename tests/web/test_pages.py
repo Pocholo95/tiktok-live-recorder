@@ -415,3 +415,62 @@ def test_update_channel_interval(client, app):
     client.post(f"/channels/{channel_id}/interval", data={"minutes": "0"})
     client.post(f"/channels/{channel_id}/interval", data={"minutes": "abc"})
     assert channels_repo.get(conn, channel_id)["automatic_interval"] == 12
+
+
+def test_dashboard_shows_live_recording_info(client, app, tmp_path):
+    from db import participants_repo
+
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    raw = tmp_path / "live.ts"
+    raw.write_bytes(b"x" * 2048)
+    rid = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path=str(raw)
+    )
+    conn.execute(
+        "UPDATE recordings SET started_at = datetime('now', '-75 minutes') WHERE id = ?",
+        (rid,),
+    )
+    conn.commit()
+    participants_repo.replace_for_recording(
+        conn,
+        rid,
+        [
+            {"username": "gone", "start_seconds": 1, "end_seconds": 5},
+            {"username": "os_grce", "start_seconds": 10, "end_seconds": None},
+        ],
+    )
+
+    statuses = {channel_id: {"phase": "recording", "detail": str(raw), "flags": {}}}
+    app.state.supervisor.get_status = lambda cid: statuses.get(cid)
+
+    text = client.get("/partials/channels").text
+
+    assert "01:15:" in text  # elapsed
+    assert "2 KB" in text  # current file size
+    assert "con @os_grce" in text and "@gone" not in text
+    assert f"/library?recording_id={rid}" in text
+
+    statuses[channel_id]["flags"] = {"stalled_since": 0}
+    assert "sin datos nuevos" in client.get("/partials/channels").text
+
+
+def test_settings_problem_alerts_toggle_and_session_health(client, app):
+    from db import settings_repo
+    from supervisor import alerts
+
+    conn = get_connection(app.state.db_path)
+    client.post("/settings/problem-alerts", data={})
+    assert settings_repo.get(conn, alerts.ENABLED_KEY) == "0"
+    client.post("/settings/problem-alerts", data={"enabled": "1"})
+    assert settings_repo.get(conn, alerts.ENABLED_KEY) == "1"
+
+    alerts.record_session_problem(conn, "creator")
+    import utils.utils as utils_module
+
+    original = utils_module.read_cookies
+    utils_module.read_cookies = lambda: {"sessionid_ss": "abcdefgh"}
+    try:
+        assert "TikTok rechazó la sesión" in client.get("/settings").text
+    finally:
+        utils_module.read_cookies = original

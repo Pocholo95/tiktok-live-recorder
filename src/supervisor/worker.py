@@ -6,7 +6,7 @@ from core import participants
 from core.tiktok_recorder import TikTokRecorder
 from db import channels_repo, participants_repo, recordings_repo, settings_repo
 from notify import discord_webhook
-from supervisor import profiles
+from supervisor import alerts, profiles
 from supervisor.thumbnails import generate_thumbnail
 from utils.enums import Mode
 from utils.logger_manager import logger
@@ -133,6 +133,9 @@ class Worker:
                     self.channel_id, phase="recording", detail=data.get("file_path")
                 )
 
+            elif phase == "session_problem":
+                self._alert_session_problem(conn, data)
+
             elif phase == "participants":
                 if self._current_recording_id is not None:
                     participants_repo.replace_for_recording(
@@ -161,6 +164,30 @@ class Worker:
             return settings_repo.get(conn, participants.SETTING_KEY)
         finally:
             conn.close()
+
+    def _alert_session_problem(self, conn, data):
+        user = data.get("user", self.username)
+        if data.get("has_session"):
+            alerts.record_session_problem(conn, user)
+            alerts.send(
+                conn,
+                "session_rejected",
+                "Tu sesión de TikTok no está funcionando",
+                f"TikTok no dejó leer el live de @{user} (tiene restricción de "
+                "edad) aunque hay una sesión configurada: probablemente venció. "
+                "Se sigue grabando, pero sin los nombres de los invitados. "
+                "Actualizá `sessionid_ss` en Ajustes → Cookies.",
+                throttle_seconds=12 * 3600,
+            )
+        else:
+            alerts.send(
+                conn,
+                f"age_restricted_no_session:{self.channel_id}",
+                f"Live de @{user} con restricción de edad",
+                "Se está grabando, pero sin sesión de TikTok no se pueden ver "
+                "los invitados. Configurá `sessionid_ss` en Ajustes → Cookies.",
+                throttle_seconds=24 * 3600,
+            )
 
     def _notify_webhook(self, conn):
         """

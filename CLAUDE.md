@@ -114,6 +114,27 @@ copies of the `*.example` files.
   the legacy `use_telegram` column (name kept to avoid a migration); the
   worker reads it from the DB each time, and it is intentionally not a
   supervisor restart trigger.
+- Problem alerts (`supervisor/alerts.py`, same Discord webhook, toggle
+  `problem_alerts_enabled`, default on; each kind throttled via
+  `settings` keys `alert_last:<kind>`):
+  - TikTok session rejected: there is NO reliable way to ask TikTok whether
+    `sessionid_ss` is valid (`/passport/web/account/info`,
+    `/api/user/info`, `/webcast/user/me` answer the same for a real, fake
+    or missing session - checked 2026-11-06). It's detected by symptom
+    instead: room info returns 4003110 while a session is configured
+    (`ParticipantTracker.on_access_denied` -> recorder `session_problem`
+    status -> worker). Shown in Settings under Cookies; cleared when a new
+    session is saved. Without a session the alert is "age-restricted live,
+    configure a session" instead.
+  - `supervisor/health.py` (thread started in serve.py, every 60 s):
+    channel in "error" for 30+ min (one alert per episode, keyed by the
+    status `since`), recording file not growing for 5+ min (sets status
+    flag `stalled_since`, shown on the dashboard). Observe-only.
+  - `ChannelStatusStore` statuses carry `since` (when the phase started,
+    kept across same-phase sets) and `flags` (reset on phase change).
+- Dashboard rows of recording channels show elapsed time, current file
+  size, guests linked right now and the stall warning (`_live_info` in
+  pages.py), refreshed by the existing 3 s polling.
 - Supervisor restart triggers are only `username`, `mode`, `proxy`
   (`supervisor._TRACKED_FIELDS`). A restart stops the worker and cuts any
   ongoing recording, so settings that can change mid-live are read live
@@ -157,9 +178,8 @@ their own PC, reviewing in the web UI):
    param baked into the downloaded script), or nightly runs break.
 3. Disk care: Discord alert below a free-space threshold; optional cleanup
    of old raws / recordings older than N days, per channel.
-4. Problem alerts on Discord: expired TikTok session, channel stuck in
-   error, "recording" whose file stopped growing.
-5. Dashboard live info: elapsed time, current file size, who is linked now.
+4. ~~Problem alerts on Discord~~ - shipped 2026-11-06.
+5. ~~Dashboard live info~~ - shipped 2026-11-06.
 6. "Appearances" on creator pages: lives of others where they were a guest.
 7. Usual live hours per creator (when they tend to go live).
 

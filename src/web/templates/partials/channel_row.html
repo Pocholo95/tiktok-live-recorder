@@ -17,7 +17,16 @@
   </td>
   <td>
     <span class="status-badge status-{{ channel.phase }}">{{ channel.phase_label }}</span>
-    {% if channel.detail %}<br><small>{{ channel.detail }}</small>{% endif %}
+    {% if channel.live %}
+    <div class="live-info">
+      <a class="live-info-main" href="/library?recording_id={{ channel.live.recording_id }}" title="Ver en la biblioteca">
+        {% if channel.live.elapsed_seconds is not none %}<span class="mono">{{ channel.live.elapsed_seconds | hhmmss }}</span>{% endif %}
+        {% if channel.live.size_bytes %}<span>· {{ channel.live.size_bytes | filesize }}</span>{% endif %}
+      </a>
+      {% if channel.live.guests %}<span class="live-info-guests">con @{{ channel.live.guests | join(", @") }}</span>{% endif %}
+      {% if channel.live.stalled_minutes is not none %}<span class="live-info-stalled">⚠ sin datos nuevos hace {{ channel.live.stalled_minutes }} min</span>{% endif %}
+    </div>
+    {% elif channel.detail and channel.phase != "recording" %}<br><small>{{ channel.detail }}</small>{% endif %}
   </td>
   <td class="row-actions">
     <button

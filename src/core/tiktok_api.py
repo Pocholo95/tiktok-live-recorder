@@ -21,6 +21,7 @@ class TikTokAPI:
         self.EULER_API = "https://tiktok.eulerstream.com"
         self.TIKREC_API = "https://tikrec.com"
         self.last_user_info = {}
+        self.last_room_status_code = None
 
         self.http_client = HttpClient(proxy, cookies).req
         self._http_client_stream = HttpClient(proxy, cookies).req_stream
@@ -97,7 +98,10 @@ class TikTokAPI:
         room_info = self.http_client.get(
             f"{self.WEBCAST_URL}/webcast/room/info/?aid=1988&room_id={room_id}"
         ).json()
-        if room_info.get("status_code", 0) != 0:
+        # Kept so callers can tell "access denied" (4003110: age-restricted
+        # live without a working session) from other failures.
+        self.last_room_status_code = room_info.get("status_code", 0)
+        if self.last_room_status_code != 0:
             return None
         return room_info.get("data") or None
 

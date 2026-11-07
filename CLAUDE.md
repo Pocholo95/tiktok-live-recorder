@@ -14,6 +14,9 @@ Fork of [Michele0303/tiktok-live-recorder](https://github.com/Michele0303/tiktok
   for now. Don't merge upstream without asking.
 - User-facing UI text is Spanish (rioplatense "vos": "elegí", "subí").
   Code, comments, commit messages and docs are English.
+- This file is the project's memory. Record here every decision, pending
+  item and idea the user agrees on (see "Backlog" at the end) instead of
+  relying on conversation history, and keep it current as work lands.
 
 ## Commands
 
@@ -106,3 +109,40 @@ copies of the `*.example` files.
 - SQLite connections are per-call (`db.database.get_connection`). In
   `async` endpoints open them inside a `run_in_threadpool` function, never
   via the sync `get_db` dependency (different thread).
+
+## Backlog
+
+Agreed but not built yet. Move items out of here when they ship.
+
+### Pending (user asked to note them)
+
+- **Upload safety.** `PUT /recordings/{id}/converted` only checks that the
+  file is a browser-playable MP4; the MP4 of a *different* live is
+  accepted, swapped in, and the raw `.ts` is deleted (unrecoverable).
+  - [ ] Server: ffprobe raw vs upload and reject (raw untouched) if the
+    durations differ by more than `max(10 s, 2 %)`.
+  - [ ] Browser: if the dropped file isn't named `<raw stem>.mp4`, ask for
+    confirmation before uploading (warning, not a block).
+- **Guest source for 3+ linked creators** (see the open question in "Web
+  hub"). Needs a `.participants.jsonl` from such a live first. TikTokLive
+  risks already discussed with the user: no account risk if it connects
+  anonymously (never pass the session), some IP rate-limit risk shared
+  with the recorder, depends on Euler Stream signing, protocol churn.
+
+### Ideas proposed, not yet chosen (2026-11-06)
+
+Ranked by usefulness for how the user works (24/7 recording, converting on
+their own PC, reviewing in the web UI):
+
+1. Auto-convert script for the user's PC: ask the hub for raw recordings,
+   download, convert with NVENC, upload; runnable on a Windows schedule.
+2. Web UI login (user/password from `.env`): the hub now stores the TikTok
+   session and the Discord webhook and has no auth at all.
+3. Disk care: Discord alert below a free-space threshold; optional cleanup
+   of old raws / recordings older than N days, per channel.
+4. Problem alerts on Discord: expired TikTok session, channel stuck in
+   error, "recording" whose file stopped growing.
+5. Dashboard live info: elapsed time, current file size, who is linked now.
+6. "Appearances" on creator pages: lives of others where they were a guest.
+7. Usual live hours per creator (when they tend to go live).
+

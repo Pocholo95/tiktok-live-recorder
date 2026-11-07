@@ -14,6 +14,18 @@
         hx-swap="outerHTML">
       <span class="muted">min</span>
     </label>
+    {% if channel.interval_now %}
+    {% set i = channel.interval_now %}
+    <div class="smart-now smart-{{ i.reason }}">
+      {% if i.reason == "learning" %}
+        aprendiendo horarios ({{ [i.lives, i.min_lives] | min }}/{{ i.min_lives }} lives, {{ [i.days, i.min_days] | min }}/{{ i.min_days }} días)
+      {% elif i.reason == "usual" %}
+        ⚡ ahora cada {{ i.minutes }} min · horario habitual
+      {% else %}
+        🌙 ahora cada {{ i.minutes }} min · fuera de horario
+      {% endif %}
+    </div>
+    {% endif %}
   </td>
   <td>
     <span class="status-badge status-{{ channel.phase }}">{{ channel.phase_label }}</span>
@@ -36,6 +48,14 @@
       class="bell{% if channel.notify %} on{% endif %}"
       title="{{ 'Avisos por Discord activados' if channel.notify else 'Activar avisos por Discord' }}">
       {{ "🔔" if channel.notify else "🔕" }}
+    </button>
+    <button
+      hx-post="/channels/{{ channel.id }}/smart"
+      hx-target="closest tr"
+      hx-swap="outerHTML"
+      class="bell{% if channel.smart %} on{% endif %}"
+      title="{{ 'Intervalo inteligente activado: más seguido en sus horarios habituales, más espaciado fuera de ellos (nunca deja de revisar)' if channel.smart else 'Activar intervalo inteligente según sus horarios' }}">
+      ⚡
     </button>
     <button
       hx-post="/channels/{{ channel.id }}/toggle"

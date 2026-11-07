@@ -40,6 +40,91 @@
   </div>
 </div>
 
+<section class="panel schedule-panel" id="schedule" data-schedule='{{ schedule | tojson }}'>
+  <div class="panel-head">
+    <h3>Horarios habituales</h3>
+    <span class="muted schedule-status">
+      {% if schedule.learned %}
+        basado en {{ schedule.lives }} lives de {{ schedule.days }} días{% if schedule.mode == "weekday" %} · por día de la semana{% endif %}
+      {% else %}
+        aprendiendo: {{ [schedule.lives, schedule.min_lives] | min }}/{{ schedule.min_lives }} lives, {{ [schedule.days, schedule.min_days] | min }}/{{ schedule.min_days }} días
+      {% endif %}
+    </span>
+  </div>
+  <p class="schedule-summary" id="schedule-summary"></p>
+  <div class="heatmap" id="heatmap" role="img" aria-label="Mapa de horarios en vivo"></div>
+  <p class="hint">En tu hora local. Más oscuro = más seguido en vivo a esa hora. Incluye una hora de margen antes y después, para no perderse el arranque. Un live fuera de lo común suma poco y se diluye con el tiempo.</p>
+</section>
+
+<script>
+(function () {
+  const root = document.getElementById("schedule");
+  const data = JSON.parse(root.dataset.schedule);
+  const days = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+  // Server bins are UTC (Monday = 0). Shift them to the viewer's zone.
+  const offset = Math.round(-new Date().getTimezoneOffset() / 60);
+  const local = new Array(168).fill(0);
+  data.probs.forEach((p, i) => { local[(((i + offset) % 168) + 168) % 168] = p; });
+
+  const grid = document.getElementById("heatmap");
+  grid.appendChild(document.createElement("span"));
+  for (let h = 0; h < 24; h++) {
+    const label = document.createElement("span");
+    label.className = "hm-hour";
+    label.textContent = h % 3 === 0 ? String(h).padStart(2, "0") : "";
+    grid.appendChild(label);
+  }
+  days.forEach((name, d) => {
+    const label = document.createElement("span");
+    label.className = "hm-day";
+    label.textContent = name;
+    grid.appendChild(label);
+    for (let h = 0; h < 24; h++) {
+      const p = local[d * 24 + h];
+      const cell = document.createElement("span");
+      cell.className = "hm-cell" + (data.learned && p >= data.threshold ? " is-usual" : "");
+      cell.style.setProperty("--p", Math.min(1, p / Math.max(data.threshold * 2, 0.01)).toFixed(3));
+      cell.title = `${name} ${String(h).padStart(2, "0")}:00 · ${Math.round(p * 100)}% de los días`;
+      grid.appendChild(cell);
+    }
+  });
+
+  // "lun, mar: 22:00–02:00" style summary of the usual hours.
+  function ranges(hours) {
+    const out = [];
+    let start = null;
+    for (let h = 0; h <= 24; h++) {
+      const on = h < 24 && hours.includes(h);
+      if (on && start === null) start = h;
+      if (!on && start !== null) { out.push([start, h]); start = null; }
+    }
+    if (out.length > 1 && out[0][0] === 0 && out[out.length - 1][1] === 24) {
+      const first = out.shift();
+      out[out.length - 1][1] = first[1] + 24;  // wraps past midnight
+    }
+    const fmt = (h) => String(h % 24).padStart(2, "0") + ":00";
+    return out.map(([a, b]) => `${fmt(a)}–${fmt(b)}`).join(", ");
+  }
+  const summary = document.getElementById("schedule-summary");
+  if (!data.lives) {
+    summary.textContent = "Todavía no hay lives grabados para calcular horarios.";
+    return;
+  }
+  const groups = new Map();
+  days.forEach((name, d) => {
+    const hours = [];
+    for (let h = 0; h < 24; h++) if (local[d * 24 + h] >= data.threshold) hours.push(h);
+    const key = ranges(hours);
+    if (!key) return;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(name.toLowerCase());
+  });
+  const parts = [...groups.entries()].map(([r, ds]) => ds.length === 7 ? `todos los días ${r}` : `${ds.join(", ")}: ${r}`);
+  const prefix = data.learned ? "Suele estar en vivo " : "Por ahora parece estar en vivo ";
+  summary.textContent = parts.length ? prefix + parts.join(" · ") : "Sin un horario fijo: sus lives no se repiten a la misma hora.";
+})();
+</script>
+
 <h2 class="section-title">Grabaciones</h2>
 <div class="rec-grid">
   {% for r in recordings %}

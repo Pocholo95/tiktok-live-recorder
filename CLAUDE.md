@@ -135,6 +135,26 @@ copies of the `*.example` files.
 - Dashboard rows of recording channels show elapsed time, current file
   size, guests linked right now and the stall warning (`_live_info` in
   pages.py), refreshed by the existing 3 s polling.
+- Live schedules (`core/schedule.py` pure math, `supervisor/schedules.py`
+  DB loading + 5 min cache, invalidated on live start/end). Agreed rules,
+  driven by the user's case of a night creator who once streamed at noon:
+  - A learned schedule only changes how OFTEN a channel is checked, never
+    whether. Smart interval is opt-in per channel (`channels.smart_interval`,
+    ⚡ on the dashboard): usual hours = half the channel interval (min
+    1 min), other hours = double (max 15 min, never faster than set),
+    configured interval unchanged while learning.
+  - Learned after 5 lives over 7 days. Probability per hour of the week =
+    weighted share of days live at that hour (half-life 30 days, ±1 h at
+    half credit so checks speed up just before the usual start). "Usual"
+    = >= 30 %. Only complete days count (a live today counts from
+    tomorrow). Per-weekday values (after 3 weeks of every weekday) are
+    shrunk toward the pooled hour-of-day pattern (prior of 2 days) and
+    the max of both is used - one odd Friday can't make an hour usual.
+  - Bins are UTC; the creator page heatmap/summary shift to the viewer's
+    local time in JS. The library marks recordings "fuera de horario".
+- `db/database.py` `_migrate` adds columns introduced after a table was
+  first created (`_ADDED_COLUMNS`); add new columns there too, not only in
+  schema.sql, or existing installs break.
 - Supervisor restart triggers are only `username`, `mode`, `proxy`
   (`supervisor._TRACKED_FIELDS`). A restart stops the worker and cuts any
   ongoing recording, so settings that can change mid-live are read live
@@ -181,5 +201,6 @@ their own PC, reviewing in the web UI):
 4. ~~Problem alerts on Discord~~ - shipped 2026-11-06.
 5. ~~Dashboard live info~~ - shipped 2026-11-06.
 6. "Appearances" on creator pages: lives of others where they were a guest.
-7. Usual live hours per creator (when they tend to go live).
+7. ~~Usual live hours per creator + smart interval~~ - shipped
+   2026-11-06.
 

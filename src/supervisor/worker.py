@@ -6,7 +6,7 @@ from core import participants
 from core.tiktok_recorder import TikTokRecorder
 from db import channels_repo, participants_repo, recordings_repo, settings_repo
 from notify import discord_webhook
-from supervisor import alerts, profiles
+from supervisor import alerts, profiles, schedules
 from supervisor.thumbnails import generate_thumbnail
 from utils.enums import Mode
 from utils.logger_manager import logger
@@ -114,6 +114,9 @@ class Worker:
 
         conn = self._get_connection(self._db_path)
         try:
+            if phase in ("recording_started", "recording_finished"):
+                schedules.invalidate(data.get("user", self.username))
+
             if phase == "recording_started":
                 self._recording_started_at = time.time()
                 self._recording_user = data.get("user", self.username)
@@ -154,7 +157,12 @@ class Worker:
         conn = self._get_connection(self._db_path)
         try:
             row = channels_repo.get(conn, self.channel_id)
-            return row["automatic_interval"] if row else None
+            if row is None:
+                return None
+            # Smart interval (opt-in per channel): faster in the creator's
+            # usual hours, slower otherwise - never stops checking.
+            minutes, _reason = schedules.effective_interval(conn, row)
+            return minutes
         finally:
             conn.close()
 

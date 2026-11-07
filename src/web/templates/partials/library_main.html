@@ -4,7 +4,7 @@
   {% set r = selected_recording %}
   <header class="rec-head">
     <div class="rec-head-title">
-      <h2>{{ avatar(r.username, "sm") }} <a class="creator-link" href="/creators/{{ r.username }}">@{{ r.username }}</a> {{ state_pill(r) }}</h2>
+      <h2>{{ avatar(r.username, "sm") }} <a class="creator-link" href="/creators/{{ r.username }}">@{{ r.username }}</a> {{ state_pill(r) }}{% if off_hours %} <span class="pill recording-off-hours" title="Este creador no suele estar en vivo a esta hora">fuera de horario</span>{% endif %}</h2>
       <p class="rec-head-meta">
         <span title="{{ r.started_at }} UTC">{{ r.started_at | ago }}</span>
         {% if r.duration_seconds %}<span>{{ r.duration_seconds | hhmmss }}</span>{% endif %}

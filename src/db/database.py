@@ -24,9 +24,26 @@ def init_db(db_path):
     try:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.executescript(_SCHEMA_PATH.read_text())
+        _migrate(conn)
         conn.commit()
     finally:
         conn.close()
+
+
+# Columns added after the first release. CREATE TABLE IF NOT EXISTS doesn't
+# touch existing tables, so databases created before a column existed get
+# it here (with its default) on the next boot.
+_ADDED_COLUMNS = {
+    "channels": [("smart_interval", "INTEGER NOT NULL DEFAULT 0")],
+}
+
+
+def _migrate(conn):
+    for table, columns in _ADDED_COLUMNS.items():
+        existing = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        for name, definition in columns:
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
 
 def get_connection(db_path):

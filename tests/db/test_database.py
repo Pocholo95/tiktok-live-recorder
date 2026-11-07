@@ -164,3 +164,26 @@ def test_clip_mark_deleted_when_recording_deleted(tmp_path):
     recordings_repo.delete(conn, recording_id)
 
     assert clip_marks_repo.list_for_recording(conn, recording_id) == []
+
+
+def test_init_db_adds_new_columns_to_existing_databases(tmp_path):
+    import sqlite3
+
+    db_path = tmp_path / "old.db"
+    old = sqlite3.connect(db_path)
+    old.execute(
+        "CREATE TABLE channels (id INTEGER PRIMARY KEY, username TEXT NOT NULL "
+        "UNIQUE, mode INTEGER NOT NULL DEFAULT 1, automatic_interval INTEGER NOT "
+        "NULL DEFAULT 5, proxy TEXT, bitrate TEXT, use_telegram INTEGER NOT NULL "
+        "DEFAULT 0, enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT, updated_at TEXT)"
+    )
+    old.execute("INSERT INTO channels (username) VALUES ('legacy')")
+    old.commit()
+    old.close()
+
+    init_db(db_path)
+    init_db(db_path)  # idempotent
+
+    row = get_connection(db_path).execute("SELECT * FROM channels").fetchone()
+    assert row["username"] == "legacy"
+    assert row["smart_interval"] == 0

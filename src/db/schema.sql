@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS channels (
     bitrate TEXT,
     use_telegram INTEGER NOT NULL DEFAULT 0,
     enabled INTEGER NOT NULL DEFAULT 1,
+    smart_interval INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

@@ -474,3 +474,86 @@ def test_settings_problem_alerts_toggle_and_session_health(client, app):
         assert "TikTok rechazó la sesión" in client.get("/settings").text
     finally:
         utils_module.read_cookies = original
+
+
+def _nightly_recordings(conn, channel_id, nights, hour=22):
+    for d in range(1, nights + 1):
+        rid = recordings_repo.start(
+            conn, channel_id=channel_id, username="creator", file_path=f"/o/{d}.ts"
+        )
+        recordings_repo.mark_completed(conn, rid, file_path=f"/o/{d}.ts", format="ts")
+        conn.execute(
+            f"""UPDATE recordings
+                SET started_at = datetime('now', 'start of day', '-{d} days', '+{hour} hours'),
+                    ended_at = datetime('now', 'start of day', '-{d} days', '+{hour + 2} hours')
+                WHERE id = ?""",
+            (rid,),
+        )
+    conn.execute(
+        "UPDATE channels SET created_at = datetime('now', '-30 days') WHERE id = ?",
+        (channel_id,),
+    )
+    conn.commit()
+
+
+def test_creator_page_shows_learned_schedule(client, app):
+    from supervisor import schedules
+
+    schedules.invalidate()
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    _nightly_recordings(conn, channel_id, 10)
+
+    text = client.get("/creators/creator").text
+
+    assert 'id="schedule"' in text
+    assert "basado en 10 lives" in text
+    assert '"learned": true' in text
+
+
+def test_smart_interval_toggle_and_dashboard_indicator(client, app):
+    from supervisor import schedules
+
+    schedules.invalidate()
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+
+    response = client.post(f"/channels/{channel_id}/smart")
+    assert channels_repo.get(conn, channel_id)["smart_interval"] == 1
+    assert "aprendiendo horarios (0/5 lives" in response.text
+
+    _nightly_recordings(conn, channel_id, 10)
+    schedules.invalidate()
+    text = client.get("/partials/channels").text
+    assert "ahora cada" in text  # learned: shows the effective interval
+
+    client.post(f"/channels/{channel_id}/smart")
+    assert channels_repo.get(conn, channel_id)["smart_interval"] == 0
+
+
+def test_library_marks_off_hours_recording(client, app):
+    from supervisor import schedules
+
+    schedules.invalidate()
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    _nightly_recordings(conn, channel_id, 12)
+    odd = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/o/odd.ts"
+    )
+    recordings_repo.mark_completed(conn, odd, file_path="/o/odd.ts", format="ts")
+    conn.execute(
+        """UPDATE recordings SET
+           started_at = datetime('now', 'start of day', '-2 days', '+11 hours'),
+           ended_at = datetime('now', 'start of day', '-2 days', '+12 hours')
+           WHERE id = ?""",
+        (odd,),
+    )
+    conn.commit()
+    schedules.invalidate()
+
+    assert "fuera de horario" in client.get(f"/library?recording_id={odd}").text
+    night = conn.execute(
+        "SELECT id FROM recordings WHERE file_path = '/o/3.ts'"
+    ).fetchone()["id"]
+    assert "fuera de horario" not in client.get(f"/library?recording_id={night}").text

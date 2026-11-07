@@ -884,3 +884,28 @@ kbd {
 .live-info-stalled { color: var(--warn); font-weight: 600; }
 
 .settings-form .filter-checkbox { flex-direction: row; align-items: center; color: var(--text); font-size: 0.9rem; }
+
+.smart-now { margin-top: 0.3rem; font-size: 0.75rem; color: var(--muted); }
+.smart-now.smart-usual { color: var(--ok); }
+.smart-now.smart-unusual { color: var(--muted); }
+
+/* ---- Live schedule heatmap ----------------------------------------- */
+
+.schedule-panel { margin-bottom: 1.25rem; }
+.schedule-summary { margin: 0.25rem 0 0.9rem; font-size: 0.95rem; }
+.heatmap {
+  display: grid;
+  grid-template-columns: 2.4rem repeat(24, minmax(0, 1fr));
+  gap: 2px;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+.hm-hour { text-align: left; font-family: var(--mono); }
+.hm-day { display: flex; align-items: center; }
+.hm-cell {
+  aspect-ratio: 1 / 1;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) calc(var(--p) * 100%), var(--panel-2));
+}
+.hm-cell.is-usual { outline: 1px solid rgba(79, 140, 255, 0.9); outline-offset: -1px; }
+.recording-off-hours { background: rgba(139, 145, 160, 0.18); color: var(--muted); }

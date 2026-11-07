@@ -155,6 +155,16 @@ converts everything still pending with your GPU (same command as the
 library page), uploads each MP4 and cleans up; a failure on one recording
 leaves its raw file untouched and moves on. Needs ffmpeg in PATH.
 
+### Learned live hours and smart interval
+
+Each creator page shows when they usually go live (heatmap and summary in
+your local time), learned from their recordings after 5 lives over 7 days.
+Recent weeks weigh more, and a one-off live at an odd hour barely moves it.
+The ⚡ button on a dashboard channel turns on the smart interval: checks
+every half the channel interval during usual hours and every double
+(max 15 min) outside them. It never stops checking, so an unusual live is
+still recorded, just detected a few minutes later.
+
 ### Who's on screen with the creator
 
 While recording, the hub checks the room every 30 s (configurable in

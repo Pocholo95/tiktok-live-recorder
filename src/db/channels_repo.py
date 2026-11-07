@@ -6,6 +6,7 @@ _UPDATABLE_FIELDS = {
     "bitrate",
     "use_telegram",
     "enabled",
+    "smart_interval",
 }
 
 

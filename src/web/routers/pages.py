@@ -82,6 +82,25 @@ def _live_info(db, channel_id, status):
     }
 
 
+def _interval_now(db, row):
+    """What the smart interval is doing right now, for the dashboard."""
+    from core import schedule as schedule_core
+    from supervisor import schedules
+
+    if not row["smart_interval"]:
+        return None
+    minutes, reason = schedules.effective_interval(db, row)
+    learned = schedules.get(db, row["username"])
+    return {
+        "minutes": minutes,
+        "reason": reason,
+        "lives": learned["lives"],
+        "days": learned["days"],
+        "min_lives": schedule_core.MIN_LIVES,
+        "min_days": schedule_core.MIN_DAYS,
+    }
+
+
 def _channel_view(row, supervisor, db=None):
     status = supervisor.get_status(row["id"]) or {}
     default_phase = "stopped" if not row["enabled"] else "starting"
@@ -94,6 +113,8 @@ def _channel_view(row, supervisor, db=None):
         "proxy": row["proxy"],
         "enabled": bool(row["enabled"]),
         "notify": bool(row["use_telegram"]),
+        "smart": bool(row["smart_interval"]),
+        "interval_now": _interval_now(db, row) if db is not None else None,
         "phase": phase,
         "phase_label": _PHASE_LABELS.get(phase, phase),
         "detail": status.get("detail"),
@@ -201,6 +222,30 @@ def update_channel_interval(
         channels_repo.update(db, channel_id, automatic_interval=value)
 
     row = channels_repo.get(db, channel_id)
+    if row is None:
+        return PlainTextResponse("")
+    return templates.TemplateResponse(
+        request,
+        "partials/channel_row.html",
+        {"channel": _channel_view(row, supervisor, db)},
+    )
+
+
+@router.post("/channels/{channel_id}/smart", response_class=HTMLResponse)
+def toggle_channel_smart(
+    request: Request,
+    channel_id: int,
+    db=Depends(get_db),
+    supervisor=Depends(get_supervisor),
+    templates=Depends(get_templates),
+):
+    # Not a restart trigger: the worker reads it before every wait.
+    row = channels_repo.get(db, channel_id)
+    if row is not None:
+        channels_repo.update(
+            db, channel_id, smart_interval=int(not row["smart_interval"])
+        )
+        row = channels_repo.get(db, channel_id)
     if row is None:
         return PlainTextResponse("")
     return templates.TemplateResponse(
@@ -359,6 +404,7 @@ def library(
             "date_to": date_to,
             "no_clips_only": no_clips_only,
             "state": state,
+            "off_hours": _is_off_hours(db, selected_recording),
             "counts": counts,
             "totals": recordings_repo.totals(db),
             "disk": _disk_usage(request),
@@ -704,6 +750,34 @@ def _creator_view(summary, channels_by_name, supervisor):
     return entry
 
 
+def _is_off_hours(db, recording):
+    """True when a creator with a learned schedule went live at an unusual hour."""
+    from core import schedule as schedule_core
+    from supervisor import schedules
+
+    if recording is None:
+        return False
+    start = schedule_core.parse_utc(recording["started_at"])
+    learned = schedules.get(db, recording["username"])
+    return bool(
+        start and learned["learned"] and not schedule_core.is_usual(learned, start)
+    )
+
+
+def _schedule_view(db, username):
+    from core import schedule as schedule_core
+    from supervisor import schedules
+
+    learned = schedules.get(db, username)
+    return {
+        **learned,
+        "probs": [round(p, 3) for p in learned["probs"]],
+        "threshold": schedule_core.USUAL_THRESHOLD,
+        "min_lives": schedule_core.MIN_LIVES,
+        "min_days": schedule_core.MIN_DAYS,
+    }
+
+
 @router.get("/creators", response_class=HTMLResponse)
 def creators_index(
     request: Request,
@@ -778,6 +852,7 @@ def creator_detail(
         {
             "username": username,
             "profile": profiles_repo.get(db, username),
+            "schedule": _schedule_view(db, username),
             "summary": summary,
             "channel": _channel_view(channel, supervisor) if channel else None,
             "recordings": recordings,

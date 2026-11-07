@@ -13,7 +13,7 @@ from web.formatting import (
     format_hours,
     time_ago,
 )
-from web.routers import media, pages
+from web.routers import api, media, pages
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 _TEMPLATES_DIR = _PACKAGE_DIR / "templates"
@@ -50,5 +50,6 @@ def create_app(db_path, supervisor, output_dir):
 
     app.include_router(pages.router)
     app.include_router(media.router)
+    app.include_router(api.router)
 
     return app

@@ -506,7 +506,13 @@ def _discord_context(request):
         poll = settings_repo.get(conn, participants.SETTING_KEY)
     finally:
         conn.close()
+    from web import convert
+
     return {
+        "convert_encoders": convert.ENCODERS,
+        "convert_sizes": convert.SIZES,
+        "convert_qualities": convert.QUALITIES,
+        "convert_defaults": convert.DEFAULTS,
         "discord_status": _mask(url) if url else None,
         "participants_poll_seconds": participants.clamp_interval(poll),
         "participants_min": participants.MIN_POLL_SECONDS,

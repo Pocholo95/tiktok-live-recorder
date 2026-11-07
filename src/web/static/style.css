@@ -865,3 +865,10 @@ kbd {
 
 .interval-edit { display: inline-flex; align-items: center; gap: 0.35rem; }
 .interval-input { width: 4.5rem; }
+
+/* ---- Auto-convert (settings) -------------------------------------- */
+
+.auto-convert { max-width: 760px; margin-bottom: 2rem; }
+.ac-steps { padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.9rem; font-size: 0.9rem; }
+.ac-steps li > strong { display: inline-block; margin-bottom: 0.15rem; }
+.code-block-full { border-top: 1px solid var(--border); border-radius: 8px; margin-top: 0.4rem; }

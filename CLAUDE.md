@@ -46,11 +46,25 @@ copies of the `*.example` files.
   `PUT /recordings/{id}/converted` streams the body to `<name>.mp4.part`,
   validates it with ffprobe (MP4 container, H.264/AV1/VP9), then swaps it
   in and deletes the raw file. Any failure leaves the raw untouched.
-- The ffmpeg command shown to the user is built client-side in
-  `templates/partials/library_convert.html` (encoder/resolution/quality,
-  single file or PowerShell folder loop). Keep the `scale+pad+fps` and
-  `aresample=async=1` parts: they are what fix resolution changes and
-  splice gaps.
+- The ffmpeg command is built in one place, `web/convert.py`
+  (encoder/resolution/quality presets, file or PowerShell folder loop).
+  The library page fetches it from `/api/convert/command`; the auto-convert
+  script fetches `/api/convert/args` (with `{input}`/`{output}`
+  placeholders). Never rebuild it client-side again. Keep the
+  `scale+pad+fps` filter and `aresample=async=1`: they are what fix
+  resolution changes and splice gaps.
+- Auto-convert: `src/web/tools/convert-pending.ps1` (Windows PowerShell 5.1,
+  only needs ffmpeg + the built-in curl.exe). Served by
+  `/tools/convert-pending.ps1` with `__HUB_URL__` replaced by the hub's
+  address (the script's own placeholder check is split in two strings so
+  the substitution can't rewrite it). It lists `/api/recordings?state=raw`
+  oldest first, re-checks each one is still raw, downloads (resumable),
+  converts, uploads via the normal `PUT /recordings/{id}/converted`, and
+  deletes the local files; one failure doesn't stop the rest, and a lock
+  file prevents overlapping runs. Settings shows install/run/schedule
+  commands (Task Scheduler via `Register-ScheduledTask`). Script messages
+  are ASCII on purpose (PS 5.1 encoding). Known gap: a corrupt raw fails
+  again on every run (logged, harmless).
 
 ## Web hub
 
@@ -134,10 +148,13 @@ Agreed but not built yet. Move items out of here when they ship.
 Ranked by usefulness for how the user works (24/7 recording, converting on
 their own PC, reviewing in the web UI):
 
-1. Auto-convert script for the user's PC: ask the hub for raw recordings,
-   download, convert with NVENC, upload; runnable on a Windows schedule.
+1. ~~Auto-convert script~~ - shipped 2026-11-06 (see "Recording
+   pipeline").
 2. Web UI login (user/password from `.env`): the hub now stores the TikTok
-   session and the Discord webhook and has no auth at all.
+   session and the Discord webhook and has no auth at all. When built, the
+   auto-convert script and its `/api/*` + `/media/*/download` +
+   `/recordings/*/converted` calls must authenticate too (e.g. a token
+   param baked into the downloaded script), or nightly runs break.
 3. Disk care: Discord alert below a free-space threshold; optional cleanup
    of old raws / recordings older than N days, per channel.
 4. Problem alerts on Discord: expired TikTok session, channel stuck in

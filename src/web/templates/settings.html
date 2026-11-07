@@ -31,6 +31,91 @@
   <button type="submit">Guardar cookies</button>
 </form>
 
+<h2>Conversión automática</h2>
+<p class="hint settings-intro">
+  Un script para tu PC que convierte solo todo lo que está "por convertir": descarga
+  cada crudo, lo convierte con tu GPU usando el mismo comando de la biblioteca, sube
+  el MP4 y borra los archivos locales. Si algo falla con una grabación, sigue con la
+  próxima y el crudo del servidor queda intacto. Necesita <strong>ffmpeg</strong> en el PATH.
+</p>
+
+<div class="auto-convert" id="auto-convert">
+  <div class="cmd-options">
+    <label>Codificador
+      <select data-ac="Encoder">
+        {% for key, label in convert_encoders.items() %}<option value="{{ key }}" {% if key == convert_defaults.encoder %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Resolución
+      <select data-ac="Size">
+        {% for key, label in convert_sizes.items() %}<option value="{{ key }}" {% if key == convert_defaults.size %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Calidad
+      <select data-ac="Quality">
+        {% for key, label in convert_qualities.items() %}<option value="{{ key }}" {% if key == convert_defaults.quality %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Hora (todas las noches)
+      <input type="time" data-ac-time value="03:00">
+    </label>
+  </div>
+
+  <ol class="ac-steps">
+    <li>
+      <strong>Instalalo</strong> (PowerShell). Lo baja a <span class="mono">%USERPROFILE%\TikTokConvert</span> ya configurado con la dirección de este hub.
+      <div class="code-block code-block-full"><pre><code id="ac-install"></code></pre><button type="button" class="btn btn-small code-copy" data-copy="#ac-install">Copiar</button></div>
+    </li>
+    <li>
+      <strong>Probalo una vez</strong> a mano.
+      <div class="code-block code-block-full"><pre><code id="ac-run"></code></pre><button type="button" class="btn btn-small code-copy" data-copy="#ac-run">Copiar</button></div>
+    </li>
+    <li>
+      <strong>Programalo</strong> para que corra solo todas las noches (la PC tiene que estar prendida y con tu sesión iniciada).
+      <div class="code-block code-block-full"><pre><code id="ac-schedule"></code></pre><button type="button" class="btn btn-small code-copy" data-copy="#ac-schedule">Copiar</button></div>
+    </li>
+  </ol>
+  <p class="hint">El registro de cada corrida queda en <span class="mono">%USERPROFILE%\TikTokConvert\convert.log</span>. También podés <a href="/tools/convert-pending.ps1">descargar el script</a> directo.</p>
+</div>
+
+<script>
+(function () {
+  const root = document.getElementById("auto-convert");
+  const dir = String.raw`$env:USERPROFILE\TikTokConvert`;
+  const script = dir + String.raw`\convert-pending.ps1`;
+  function flags() {
+    return [...root.querySelectorAll("[data-ac]")]
+      .map((s) => `-${s.dataset.ac} ${s.value}`)
+      .join(" ");
+  }
+  function render() {
+    const f = flags();
+    const time = root.querySelector("[data-ac-time]").value || "03:00";
+    document.getElementById("ac-install").textContent =
+      `New-Item -ItemType Directory -Force "${dir}" | Out-Null; ` +
+      `curl.exe -s -o "${script}" ${location.origin}/tools/convert-pending.ps1`;
+    document.getElementById("ac-run").textContent =
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${script}" ${f}`;
+    document.getElementById("ac-schedule").textContent =
+      `$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \`"${script}\`" ${f}"
+` +
+      `$trigger = New-ScheduledTaskTrigger -Daily -At ${time}
+` +
+      `Register-ScheduledTask -TaskName "TikTok Convert" -Action $action -Trigger $trigger -Force`;
+  }
+  root.querySelectorAll("select, input").forEach((el) => el.addEventListener("change", render));
+  root.querySelectorAll("[data-copy]").forEach((button) => {
+    button.addEventListener("click", () => {
+      navigator.clipboard.writeText(root.querySelector(button.dataset.copy).textContent).then(() => {
+        button.textContent = "¡Copiado!";
+        setTimeout(() => { button.textContent = "Copiar"; }, 1500);
+      });
+    });
+  });
+  render();
+})();
+</script>
+
 <h2>Invitados en pantalla</h2>
 <p class="hint settings-intro">
   Mientras graba, el hub revisa cada tanto quién está conectado con el creador

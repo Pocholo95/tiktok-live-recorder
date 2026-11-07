@@ -55,6 +55,7 @@
           <pre><code id="ffmpeg-cmd"></code></pre>
           <button type="button" class="btn btn-small code-copy" data-copy="#ffmpeg-cmd">Copiar</button>
         </div>
+        <p class="hint">¿Muchos pendientes? Con la <a href="/settings#auto-convert">conversión automática</a> tu PC los convierte y sube solos.</p>
       </div>
     </li>
 
@@ -90,12 +91,6 @@
   const cmdEl = document.getElementById("ffmpeg-cmd");
   const STORAGE_KEY = "convert-cmd-options";
 
-  const QUALITY = {
-    h264_nvenc: { high: 24, normal: 28, light: 32 },
-    av1_nvenc: { high: 30, normal: 34, light: 38 },
-    libx264: { high: 20, normal: 23, light: 27 },
-  };
-
   let scope = "file";
   const selects = root.querySelectorAll("[data-cmd]");
 
@@ -111,33 +106,24 @@
     return o;
   }
 
-  function buildArgs(o) {
-    const [w, h] = o.size.split("x");
-    const q = QUALITY[o.encoder][o.quality];
-    const video = o.encoder === "libx264"
-      ? `-c:v libx264 -preset veryfast -crf ${q}`
-      : `-c:v ${o.encoder} -preset p5 -rc vbr -cq ${q} -b:v 0`;
-    const vf = `scale=${w}:${h}:force_original_aspect_ratio=decrease,` +
-      `pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p`;
-    return {
-      pre: "-hide_banner -fflags +genpts+discardcorrupt",
-      post: `-vf "${vf}" -af "aresample=async=1:first_pts=0" ${video} -g 60 ` +
-        "-c:a aac -b:a 128k -ac 2 -movflags +faststart",
-    };
-  }
-
+  // The command is built server-side (web/convert.py), the same one the
+  // auto-convert script uses, so the two can never differ.
+  let requestId = 0;
   function render() {
     const o = options();
-    const a = buildArgs(o);
-    cmdEl.textContent = scope === "file"
-      ? `ffmpeg ${a.pre} -i "${rawName}" ${a.post} "${mp4Name}"`
-      : `Get-ChildItem *.ts, *.flv | ForEach-Object { ffmpeg ${a.pre} -i $_.FullName ${a.post} ($_.BaseName + ".mp4") }`;
     root.querySelectorAll("[data-cmd-scope]").forEach((t) => {
       t.classList.toggle("active", t.dataset.cmdScope === scope);
     });
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...o, scope }));
     } catch (e) { /* ignore */ }
+
+    const params = new URLSearchParams({ recording_id: recordingId, scope, ...o });
+    const mine = ++requestId;
+    fetch(`/api/convert/command?${params}`)
+      .then((r) => r.json())
+      .then((data) => { if (mine === requestId) cmdEl.textContent = data.command; })
+      .catch(() => { if (mine === requestId) cmdEl.textContent = "No se pudo armar el comando."; });
   }
 
   selects.forEach((s) => s.addEventListener("change", render));

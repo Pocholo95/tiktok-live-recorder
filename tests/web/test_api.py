@@ -95,3 +95,32 @@ def test_settings_page_offers_auto_convert(client):
     text = client.get("/settings").text
     assert 'id="auto-convert"' in text
     assert "/tools/convert-pending.ps1" in text
+
+
+def test_script_uses_proxy_scheme_and_host(client):
+    text = client.get(
+        "/tools/convert-pending.ps1",
+        headers={
+            "X-Forwarded-Proto": "https",
+            "X-Forwarded-Host": "tiktok.example.net",
+        },
+    ).text
+    assert '[string]$Hub = "https://tiktok.example.net"' in text
+
+
+def test_script_prefers_hub_public_url(client, monkeypatch):
+    monkeypatch.setenv("HUB_PUBLIC_URL", "https://hub.example.org/")
+    text = client.get(
+        "/tools/convert-pending.ps1", headers={"X-Forwarded-Proto": "http"}
+    ).text
+    assert '[string]$Hub = "https://hub.example.org"' in text
+
+
+def test_script_verifies_uploads_before_cleaning_up(client):
+    text = client.get("/tools/convert-pending.ps1").text
+    # A redirect or any non-200 must be an error, never a silent success,
+    # and local files are only deleted once the hub shows the MP4.
+    assert '-w "%{http_code}"' in text
+    assert '$status -ne "200"' in text
+    assert '$after.format -ne "mp4"' in text
+    assert "%{redirect_url}" in text

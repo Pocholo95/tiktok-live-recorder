@@ -3,6 +3,7 @@ Small JSON API used by the library page (convert command) and by the
 auto-convert script that runs on the user's PC (tools/convert-pending.ps1).
 """
 
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -86,15 +87,37 @@ def convert_command(
     }
 
 
+def public_base_url(request):
+    """
+    The address clients outside the container use to reach the hub.
+    Behind a reverse proxy that terminates HTTPS the app itself only sees
+    plain http, so: HUB_PUBLIC_URL if set, else the proxy's
+    X-Forwarded-Proto / X-Forwarded-Host, else the request's own URL.
+    (Getting this wrong once produced an http:// script whose uploads were
+    silently redirected and dropped.)
+    """
+    configured = os.environ.get("HUB_PUBLIC_URL", "").strip().rstrip("/")
+    if configured:
+        return configured
+    base = str(request.base_url).rstrip("/")
+    proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip()
+    host = request.headers.get("x-forwarded-host", "").split(",")[0].strip()
+    if proto or host:
+        scheme, _, rest = base.partition("://")
+        netloc, _, path = rest.partition("/")
+        base = f"{proto or scheme}://{host or netloc}" + (f"/{path}" if path else "")
+    return base
+
+
 @router.get("/tools/convert-pending.ps1")
 def download_convert_script(request: Request):
     """The auto-convert script, pre-filled with this hub's address."""
-    hub_url = str(request.base_url).rstrip("/")
+    hub_url = public_base_url(request)
     script = _SCRIPT_PATH.read_text(encoding="utf-8").replace("__HUB_URL__", hub_url)
     # UTF-8 with BOM: Windows PowerShell 5.1 reads BOM-less files as ANSI,
     # which would garble the Spanish messages.
     return PlainTextResponse(
-        "﻿" + script,
+        "\ufeff" + script,
         media_type="text/plain; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="convert-pending.ps1"'},
     )

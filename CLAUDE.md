@@ -62,7 +62,14 @@ copies of the `*.example` files.
   converts, uploads via the normal `PUT /recordings/{id}/converted`, and
   deletes the local files; one failure doesn't stop the rest, and a lock
   file prevents overlapping runs. Settings shows install/run/schedule
-  commands (Task Scheduler via `Register-ScheduledTask`). Script messages
+  commands (Task Scheduler via `Register-ScheduledTask`).
+  The user's hub is behind an HTTPS reverse proxy (https://tiktok.pclo.net):
+  the script's hub URL comes from `api.public_base_url` (HUB_PUBLIC_URL,
+  else X-Forwarded-Proto/Host). A first version baked in http://, and the
+  proxy's 301 on the upload PUT was taken as success and the local files
+  deleted. The script now follows a redirecting hub URL up front (curl
+  `%{redirect_url}`), requires HTTP 200 on upload, and re-checks
+  `/api/recordings/{id}` is mp4 before deleting anything local. Script messages
   are ASCII on purpose (PS 5.1 encoding). Known gap: a corrupt raw fails
   again on every run (logged, harmless).
 

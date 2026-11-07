@@ -71,9 +71,24 @@ if (Test-Path $LockFile) {
 }
 Set-Content -Path $LockFile -Value $PID
 
+# If the hub address redirects (e.g. http -> https behind a proxy), use the
+# final address: uploads (PUT) must never be sent to a redirecting URL.
+function Resolve-HubUrl([string]$Url) {
+    # curl reports where a 3xx would go without following it.
+    $target = & curl.exe -s -o NUL -w "%{redirect_url}" "$Url/api/recordings?state=raw"
+    if ($LASTEXITCODE -ne 0) { throw "no se pudo conectar con el hub en $Url (curl $LASTEXITCODE)" }
+    if ($target) {
+        $final = ($target -replace "/api/recordings.*$", "").TrimEnd("/")
+        Log "El hub redirige a $final; se usa esa direccion."
+        return $final
+    }
+    return $Url
+}
+
 $failed = 0
 $done = 0
 try {
+    $Hub = Resolve-HubUrl $Hub
     Log "Hub: $Hub | carpeta: $WorkDir | $Encoder $Size $Quality"
 
     $pending = (Invoke-RestMethod -Uri "$Hub/api/recordings?state=raw").recordings
@@ -129,11 +144,20 @@ try {
             # 3. Upload; the hub checks it before replacing the raw.
             Log "  subiendo..."
             $response = Join-Path $WorkDir ".upload-response.json"
-            & curl.exe -sS --fail-with-body -T $mp4 -H "Content-Type: video/mp4" -o $response "$Hub/recordings/$id/converted"
+            $status = & curl.exe -sS -T $mp4 -H "Content-Type: video/mp4" -o $response -w "%{http_code}" "$Hub/recordings/$id/converted"
             $code = $LASTEXITCODE
             $detail = ""
             if (Test-Path $response) { $detail = Get-Content $response -Raw; Remove-Item $response }
-            if ($code -ne 0) { throw "el hub rechazo la subida: $detail" }
+            if ($code -ne 0) { throw "la subida fallo (curl $code)" }
+            # Only a 200 means the hub accepted and swapped it in; a redirect
+            # or anything else is a failure, never a silent success.
+            if ($status -ne "200") { throw "el hub respondio $status a la subida: $detail" }
+
+            # Trust but verify before deleting anything local.
+            $after = Invoke-RestMethod -Uri "$Hub/api/recordings/$id"
+            if ($after.format -ne "mp4") {
+                throw "el hub no muestra la grabacion como MP4 despues de subirla"
+            }
 
             # 4. Clean up.
             if (-not $KeepFiles) {

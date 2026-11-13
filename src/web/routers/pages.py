@@ -16,6 +16,7 @@ from db import (
     settings_repo,
 )
 from db.database import get_connection
+from web import convert as convert_presets
 from utils.enums import Mode
 from web.deps import get_db, get_supervisor, get_templates
 
@@ -427,6 +428,10 @@ def library(
             "state": state,
             "off_hours": _is_off_hours(db, selected_recording),
             "counts": counts,
+            "convert_encoders": convert_presets.ENCODERS,
+            "convert_sizes": convert_presets.SIZES,
+            "convert_qualities": convert_presets.QUALITIES,
+            "convert_defaults": convert_presets.DEFAULTS,
             "totals": recordings_repo.totals(db),
             "disk": _disk_usage(request),
             "state_tabs": state_tabs,
@@ -645,13 +650,7 @@ def _discord_context(request):
         session_problem = alerts.last_session_problem(conn)
     finally:
         conn.close()
-    from web import convert
-
     return {
-        "convert_encoders": convert.ENCODERS,
-        "convert_sizes": convert.SIZES,
-        "convert_qualities": convert.QUALITIES,
-        "convert_defaults": convert.DEFAULTS,
         "discord_status": _mask(url) if url else None,
         "problem_alerts": problem_alerts,
         "grace_minutes": round(grace_seconds / 60, 1),

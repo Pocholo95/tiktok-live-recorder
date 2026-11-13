@@ -20,6 +20,51 @@ document.addEventListener("click", (e) => {
   item.classList.add("active");
 });
 
+// One-line convert commands (batch bar + each raw recording). They all use
+// the same options, remembered per browser; changing them re-renders every
+// command and tells the manual ffmpeg panel to refresh too.
+(function () {
+  const KEY = "convert-cmd-options";
+  const DEFAULTS = {{ convert_defaults | tojson }};
+  function load() {
+    try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; }
+    catch (e) { return { ...DEFAULTS }; }
+  }
+  function save(o) { try { localStorage.setItem(KEY, JSON.stringify(o)); } catch (e) { /* ignore */ } }
+
+  window.convertOptions = load;
+  function render() {
+    const o = load();
+    document.querySelectorAll("[data-convert-opt]").forEach((s) => { s.value = o[s.dataset.convertOpt]; });
+    const origin = location.origin;
+    document.querySelectorAll("[data-convert-cmd]").forEach((el) => {
+      const ids = el.dataset.ids ? ` -Id ${el.dataset.ids}` : "";
+      el.textContent =
+        `& ([scriptblock]::Create((irm "${origin}/tools/convert-pending.ps1?inline=1"))) ` +
+        `-Hub ${origin} -Encoder ${o.encoder} -Size ${o.size} -Quality ${o.quality}${ids}`;
+    });
+  }
+  document.addEventListener("change", (e) => {
+    const s = e.target.closest("[data-convert-opt]");
+    if (!s) return;
+    save({ ...load(), [s.dataset.convertOpt]: s.value });
+    render();
+    document.dispatchEvent(new CustomEvent("convert-options-changed"));
+  });
+  document.addEventListener("click", (e) => {
+    const button = e.target.closest("[data-copy-cmd]");
+    if (!button) return;
+    const code = button.parentElement.querySelector("[data-convert-cmd]");
+    navigator.clipboard.writeText(code.textContent).then(() => {
+      button.textContent = "¡Copiado!";
+      setTimeout(() => { button.textContent = "Copiar"; }, 1500);
+    });
+  });
+  document.addEventListener("DOMContentLoaded", render);
+  document.addEventListener("htmx:afterSettle", render);
+  render();
+})();
+
 // "▶ Ir" next to each guest: jump the player to when they joined.
 document.addEventListener("click", (e) => {
   const button = e.target.closest("[data-seek]");

@@ -110,12 +110,18 @@ def public_base_url(request):
 
 
 @router.get("/tools/convert-pending.ps1")
-def download_convert_script(request: Request):
-    """The auto-convert script, pre-filled with this hub's address."""
+def download_convert_script(request: Request, inline: bool = False):
+    """
+    The convert script, pre-filled with this hub's address. `inline=1` is
+    for the one-line command (`[scriptblock]::Create((irm ...))`): plain
+    text without BOM, which would be a stray character in a script block.
+    Otherwise a .ps1 download with a BOM, which Windows PowerShell 5.1 needs
+    to read a UTF-8 file correctly.
+    """
     hub_url = public_base_url(request)
     script = _SCRIPT_PATH.read_text(encoding="utf-8").replace("__HUB_URL__", hub_url)
-    # UTF-8 with BOM: Windows PowerShell 5.1 reads BOM-less files as ANSI,
-    # which would garble the Spanish messages.
+    if inline:
+        return PlainTextResponse(script, media_type="text/plain; charset=utf-8")
     return PlainTextResponse(
         "\ufeff" + script,
         media_type="text/plain; charset=utf-8",

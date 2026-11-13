@@ -19,6 +19,30 @@
 
   {{ stat_tiles(totals, disk) }}
 
+  {% if counts.raw %}
+  <section class="convert-bar" id="convert-bar">
+    <div class="convert-bar-head">
+      <span class="convert-bar-title">🎬 {{ counts.raw }} por convertir</span>
+      <span class="muted">Copiá el comando y pegalo en PowerShell: se descargan, se convierten con tu GPU y se suben solas.</span>
+    </div>
+    <div class="convert-bar-opts">
+      <select data-convert-opt="encoder" aria-label="Codificador">
+        {% for key, label in convert_encoders.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+      </select>
+      <select data-convert-opt="size" aria-label="Resolución">
+        {% for key, label in convert_sizes.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+      </select>
+      <select data-convert-opt="quality" aria-label="Calidad">
+        {% for key, label in convert_qualities.items() %}<option value="{{ key }}">Calidad {{ label | lower }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="code-block code-block-full">
+      <pre><code data-convert-cmd></code></pre>
+      <button type="button" class="btn btn-small code-copy" data-copy-cmd>Copiar</button>
+    </div>
+  </section>
+  {% endif %}
+
   <div class="library-layout">
     <aside class="library-sidebar">
       <form

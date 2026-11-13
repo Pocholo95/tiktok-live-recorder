@@ -1,85 +1,71 @@
 {% set raw_name = r.file_path | basename %}
 <section class="workflow" id="convert-workflow" data-recording-id="{{ r.id }}" data-raw-name="{{ raw_name }}">
-  <ol class="steps">
-    <li class="step">
-      <div class="step-num">1</div>
-      <div class="step-body">
-        <h3>Descargá el crudo</h3>
-        <p class="muted">
-          <span class="mono">{{ raw_name }}</span>
-          {% if r.file_size_bytes %}· {{ r.file_size_bytes | filesize }}{% endif %}
-        </p>
-        <a class="btn" href="/media/{{ r.id }}/download">Descargar .{{ r.format }}</a>
-      </div>
-    </li>
+  <div class="panel convert-one">
+    <h3>Convertir y subir esta grabación</h3>
+    <p class="muted">
+      <span class="mono">{{ raw_name }}</span>{% if r.file_size_bytes %} · {{ r.file_size_bytes | filesize }}{% endif %}.
+      Pegalo en PowerShell: la descarga, la convierte con tu GPU (con las opciones de la barra de arriba)
+      y la sube. Esta página se actualiza sola cuando termina.
+    </p>
+    <div class="code-block code-block-full">
+      <pre><code data-convert-cmd data-ids="{{ r.id }}"></code></pre>
+      <button type="button" class="btn btn-small code-copy" data-copy-cmd>Copiar</button>
+    </div>
+  </div>
 
-    <li class="step">
-      <div class="step-num">2</div>
-      <div class="step-body">
-        <h3>Convertilo en tu PC con la GPU</h3>
-        <p class="muted">
-          Pasa todo a una sola resolución, rellena con negro las partes con otro tamaño
-          (cuando entran o salen invitados) y rehace los timestamps de los cortes.
-          Abrí una terminal en la carpeta del archivo y pegá esto:
-        </p>
-
-        <div class="cmd-options">
-          <label>Codificador
-            <select data-cmd="encoder">
-              <option value="h264_nvenc">NVIDIA H.264 (compatible con todo)</option>
-              <option value="av1_nvenc">NVIDIA AV1 (más liviano, RTX 40+)</option>
-              <option value="libx264">CPU x264 (sin GPU, lento)</option>
-            </select>
-          </label>
-          <label>Resolución
-            <select data-cmd="size">
-              <option value="720x1280">720×1280 vertical</option>
-              <option value="1080x1920">1080×1920 vertical</option>
-              <option value="1280x720">1280×720 horizontal</option>
-            </select>
-          </label>
-          <label>Calidad
-            <select data-cmd="quality">
-              <option value="high">Alta</option>
-              <option value="normal" selected>Normal</option>
-              <option value="light">Liviana</option>
-            </select>
-          </label>
+  <details class="manual-convert">
+    <summary>Hacerlo a mano (descargar, convertir y subir por separado)</summary>
+    <ol class="steps">
+      <li class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <h3>Descargá el crudo</h3>
+          <a class="btn" href="/media/{{ r.id }}/download">Descargar .{{ r.format }}</a>
         </div>
+      </li>
 
-        <div class="tabs" role="tablist">
-          <button type="button" class="tab active" data-cmd-scope="file">Este archivo</button>
-          <button type="button" class="tab" data-cmd-scope="folder">Toda la carpeta (PowerShell)</button>
-        </div>
-        <div class="code-block">
-          <pre><code id="ffmpeg-cmd"></code></pre>
-          <button type="button" class="btn btn-small code-copy" data-copy="#ffmpeg-cmd">Copiar</button>
-        </div>
-        <p class="hint">¿Muchos pendientes? Con la <a href="/settings#auto-convert">conversión automática</a> tu PC los convierte y sube solos.</p>
-      </div>
-    </li>
-
-    <li class="step">
-      <div class="step-num">3</div>
-      <div class="step-body">
-        <h3>Subí el MP4</h3>
-        <p class="muted">Reemplaza el crudo: el .{{ r.format }} se borra del servidor y se habilita el editor de clips.</p>
-        <label class="dropzone" id="upload-dropzone">
-          <input type="file" accept="video/mp4,.mp4" id="upload-input" hidden>
-          <span class="dropzone-text" id="upload-text">Arrastrá el <span class="mono">.mp4</span> acá o <u>elegí el archivo</u></span>
-          <span class="progress" hidden><span class="progress-bar" id="upload-bar"></span></span>
-        </label>
-        <p class="upload-status" id="upload-status" role="status"></p>
-        <details class="more">
-          <summary>Subirlo desde la terminal</summary>
-          <div class="code-block">
-            <pre><code id="curl-cmd"></code></pre>
-            <button type="button" class="btn btn-small code-copy" data-copy="#curl-cmd">Copiar</button>
+      <li class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <h3>Convertilo con ffmpeg</h3>
+          <p class="muted">
+            Pasa todo a una sola resolución, rellena con negro las partes con otro tamaño
+            (cuando entran o salen invitados) y rehace los timestamps de los cortes.
+            Abrí una terminal en la carpeta del archivo y pegá esto:
+          </p>
+          <div class="tabs" role="tablist">
+            <button type="button" class="tab active" data-cmd-scope="file">Este archivo</button>
+            <button type="button" class="tab" data-cmd-scope="folder">Toda la carpeta (PowerShell)</button>
           </div>
-        </details>
-      </div>
-    </li>
-  </ol>
+          <div class="code-block">
+            <pre><code id="ffmpeg-cmd"></code></pre>
+            <button type="button" class="btn btn-small code-copy" data-copy="#ffmpeg-cmd">Copiar</button>
+          </div>
+        </div>
+      </li>
+
+      <li class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <h3>Subí el MP4</h3>
+          <p class="muted">Reemplaza el crudo: el .{{ r.format }} se borra del servidor y se habilita el editor de clips.</p>
+          <label class="dropzone" id="upload-dropzone">
+            <input type="file" accept="video/mp4,.mp4" id="upload-input" hidden>
+            <span class="dropzone-text" id="upload-text">Arrastrá el <span class="mono">.mp4</span> acá o <u>elegí el archivo</u></span>
+            <span class="progress" hidden><span class="progress-bar" id="upload-bar"></span></span>
+          </label>
+          <p class="upload-status" id="upload-status" role="status"></p>
+          <details class="more">
+            <summary>Subirlo desde la terminal</summary>
+            <div class="code-block">
+              <pre><code id="curl-cmd"></code></pre>
+              <button type="button" class="btn btn-small code-copy" data-copy="#curl-cmd">Copiar</button>
+            </div>
+          </details>
+        </div>
+      </li>
+    </ol>
+  </details>
 </section>
 
 <script>
@@ -89,36 +75,27 @@
   const rawName = root.dataset.rawName;
   const mp4Name = rawName.replace(/\.[^.]+$/, "") + ".mp4";
   const cmdEl = document.getElementById("ffmpeg-cmd");
-  const STORAGE_KEY = "convert-cmd-options";
+  const SCOPE_KEY = "convert-cmd-scope";
 
   let scope = "file";
-  const selects = root.querySelectorAll("[data-cmd]");
+  try { scope = localStorage.getItem(SCOPE_KEY) || "file"; } catch (e) { /* default */ }
 
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    selects.forEach((s) => { if (saved[s.dataset.cmd]) s.value = saved[s.dataset.cmd]; });
-    if (saved.scope) scope = saved.scope;
-  } catch (e) { /* storage unavailable - defaults are fine */ }
-
+  // Same options as the batch bar (library.html), so every command agrees.
   function options() {
-    const o = {};
-    selects.forEach((s) => { o[s.dataset.cmd] = s.value; });
-    return o;
+    const o = window.convertOptions ? window.convertOptions() : {};
+    return { encoder: o.encoder, size: o.size, quality: o.quality };
   }
 
-  // The command is built server-side (web/convert.py), the same one the
-  // auto-convert script uses, so the two can never differ.
+  // The ffmpeg command is built server-side (web/convert.py), the same one
+  // the convert script uses, so the two can never differ.
   let requestId = 0;
   function render() {
-    const o = options();
     root.querySelectorAll("[data-cmd-scope]").forEach((t) => {
       t.classList.toggle("active", t.dataset.cmdScope === scope);
     });
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...o, scope }));
-    } catch (e) { /* ignore */ }
+    try { localStorage.setItem(SCOPE_KEY, scope); } catch (e) { /* ignore */ }
 
-    const params = new URLSearchParams({ recording_id: recordingId, scope, ...o });
+    const params = new URLSearchParams({ recording_id: recordingId, scope, ...options() });
     const mine = ++requestId;
     fetch(`/api/convert/command?${params}`)
       .then((r) => r.json())
@@ -126,11 +103,29 @@
       .catch(() => { if (mine === requestId) cmdEl.textContent = "No se pudo armar el comando."; });
   }
 
-  selects.forEach((s) => s.addEventListener("change", render));
   root.querySelectorAll("[data-cmd-scope]").forEach((t) => {
     t.addEventListener("click", () => { scope = t.dataset.cmdScope; render(); });
   });
+  document.addEventListener("convert-options-changed", render);
   render();
+
+  // When the one-line command finishes on the PC, swap to the player by
+  // itself: poll this recording while its panel is on screen.
+  const poll = setInterval(() => {
+    if (!document.body.contains(root)) { clearInterval(poll); return; }
+    fetch(`/api/recordings/${recordingId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((rec) => {
+        if (!rec || rec.format !== "mp4" || !document.body.contains(root)) return;
+        clearInterval(poll);
+        const pill = document.querySelector(`.rec-item[data-recording-id="${recordingId}"] .pill`);
+        if (pill) { pill.className = "pill pill-ready"; pill.textContent = "MP4"; }
+        htmx.ajax("GET", `/library?recording_id=${recordingId}`, {
+          target: "#library-main", swap: "outerHTML",
+        });
+      })
+      .catch(() => { /* hub busy - try again next tick */ });
+  }, 5000);
 
   document.getElementById("curl-cmd").textContent =
     `curl.exe -T "${mp4Name}" ${location.origin}/recordings/${recordingId}/converted`;

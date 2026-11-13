@@ -145,3 +145,10 @@ def test_relative_threshold_has_a_noise_floor():
     assert schedule.usual_threshold([0.04] * 168) == schedule.MIN_USUAL
     assert schedule.usual_threshold([0.0] * 167 + [1.0]) == schedule.USUAL_THRESHOLD
     assert schedule.usual_threshold([0.0] * 167 + [0.2]) == 0.1
+
+
+def test_creator_without_channel_uses_first_live():
+    # Deleted channel: no "observed since" date, recordings still exist.
+    s = schedule.compute(_nightly(10), None, now=NOW)
+    assert s["lives"] == 10 and s["days"] >= 9
+    assert schedule.compute([], None, now=NOW)["lives"] == 0

@@ -91,10 +91,36 @@ def test_convert_script_download_is_prefilled_with_hub_url(client):
     assert "attachment" in response.headers["content-disposition"]
 
 
-def test_settings_page_offers_auto_convert(client):
+def test_library_shows_batch_and_single_convert_commands(client, app):
+    rid = _recording(app, "/out/TK_a.ts", "ts")
+
+    text = client.get(f"/library?recording_id={rid}").text
+
+    assert 'id="convert-bar"' in text  # batch command, top of the library
+    assert "1 por convertir" in text
+    assert f'data-convert-cmd data-ids="{rid}"' in text  # this recording only
+    assert "convert-pending.ps1?inline=1" in text
+    assert "Hacerlo a mano" in text  # manual steps still available
+
+
+def test_no_convert_bar_when_nothing_pending(client, app):
+    _recording(app, "/out/TK_a.mp4", "mp4")
+    assert 'id="convert-bar"' not in client.get("/library").text
+
+
+def test_settings_no_longer_has_scheduled_conversion(client):
     text = client.get("/settings").text
-    assert 'id="auto-convert"' in text
-    assert "/tools/convert-pending.ps1" in text
+    assert "Register-ScheduledTask" not in text
+
+
+def test_inline_script_has_no_bom_and_never_exits_the_console(client):
+    text = client.get("/tools/convert-pending.ps1?inline=1").text
+    assert not text.startswith("﻿")
+    assert "[int[]]$Id" in text
+    # `exit` is only allowed when running as a file, never in the main logic.
+    assert "if ($PSCommandPath) { exit $exitCode }" in text
+    body = text.split("function Invoke-HubConvert", 1)[1].split("$exitCode =", 1)[0]
+    assert "exit " not in body
 
 
 def test_script_uses_proxy_scheme_and_host(client):

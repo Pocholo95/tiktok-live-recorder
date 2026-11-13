@@ -146,14 +146,15 @@ TikTok lookup the recorder already does on every check (no extra
 requests), saved under `OUTPUT_DIR/avatars/` and refreshed every few hours.
 They appear after a channel's first check.
 
-### Automatic conversion on your PC
+### Converting with one command
 
-Settings → *Conversión automática* gives you a PowerShell script
-(`convert-pending.ps1`, pre-filled with the hub's address) and the commands
-to install it, run it once and schedule it nightly with Task Scheduler. It
-converts everything still pending with your GPU (same command as the
-library page), uploads each MP4 and cleans up; a failure on one recording
-leaves its raw file untouched and moves on. Needs ffmpeg in PATH.
+The library shows a bar with how many recordings are pending and a
+PowerShell one-liner that downloads each one, converts it with your GPU
+(same command as the library page) and uploads the MP4 back. Each raw
+recording also has its own one-liner for just that recording, and the page
+switches to the player by itself when it's done. Nothing to install: the
+command fetches the newest script from the hub every time. Needs ffmpeg in
+PATH. A failure on one recording leaves its raw file untouched and moves on.
 
 ### When a live drops and comes back
 

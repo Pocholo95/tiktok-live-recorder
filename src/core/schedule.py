@@ -83,10 +83,10 @@ def compute(spans, observed_since, now=None):
     """
     now = now or datetime.now(timezone.utc)
     spans = [(s, min(e, now)) for s, e in spans if s and e and e > s]
-    first = (
-        min([observed_since] + [s for s, _ in spans if s]) if spans else observed_since
-    )
-    first = first or now
+    # observed_since is None for creators whose channel was deleted (their
+    # recordings are kept): fall back to their first live.
+    candidates = [t for t in [observed_since] + [s for s, _ in spans] if t]
+    first = min(candidates) if candidates else now
     days = max((now - first).total_seconds() / 86400, 0)
 
     result = {

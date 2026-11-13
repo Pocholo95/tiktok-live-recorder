@@ -66,25 +66,37 @@ copies of the `*.example` files.
   placeholders). Never rebuild it client-side again. Keep the
   `scale+pad+fps` filter and `aresample=async=1`: they are what fix
   resolution changes and splice gaps.
-- Auto-convert: `src/web/tools/convert-pending.ps1` (Windows PowerShell 5.1,
-  only needs ffmpeg + the built-in curl.exe). Served by
-  `/tools/convert-pending.ps1` with `__HUB_URL__` replaced by the hub's
-  address (the script's own placeholder check is split in two strings so
-  the substitution can't rewrite it). It lists `/api/recordings?state=raw`
-  oldest first, re-checks each one is still raw, downloads (resumable),
-  converts, uploads via the normal `PUT /recordings/{id}/converted`, and
-  deletes the local files; one failure doesn't stop the rest, and a lock
-  file prevents overlapping runs. Settings shows install/run/schedule
-  commands (Task Scheduler via `Register-ScheduledTask`).
+- Converting is ON DEMAND with one-line commands (user decision
+  2026-11-13: no scheduled/automatic conversion - don't bring back Task
+  Scheduler or Settings install steps). The library shows a batch bar
+  ("N por convertir", encoder/size/quality selects, remembered in
+  localStorage `convert-cmd-options`) and, on each raw recording, a
+  command for just that one (`-Id <id>`); manual download/ffmpeg/upload
+  steps stay folded under "Hacerlo a mano". The command is
+  `& ([scriptblock]::Create((irm "<hub>/tools/convert-pending.ps1?inline=1"))) -Hub <hub> ...`
+  so nothing is installed and the newest script always runs. The raw
+  panel polls `/api/recordings/{id}` every 5 s and swaps to the player
+  when it becomes mp4.
+- `src/web/tools/convert-pending.ps1` (Windows PowerShell 5.1, needs ffmpeg
+  + built-in curl.exe): served with `__HUB_URL__` replaced (placeholder
+  check split in two strings); `?inline=1` = no BOM (a BOM breaks
+  `[scriptblock]::Create`), plain download = with BOM. All logic is in
+  `Invoke-HubConvert`, which RETURNS an exit code: `exit` from a script
+  block would close the user's console, so it only exits when run as a
+  file (`$PSCommandPath`). Lists `/api/recordings?state=raw` oldest first
+  (filtered by `-Id`), re-checks each is still raw, downloads (resumable),
+  converts with `/api/convert/args`, uploads via
+  `PUT /recordings/{id}/converted`, deletes local files; one failure
+  doesn't stop the rest; a lock file prevents parallel runs. Messages are
+  ASCII on purpose (PS 5.1 encoding). Default work dir
+  `%USERPROFILE%\TikTokConvert`.
   The user's hub is behind an HTTPS reverse proxy (https://tiktok.pclo.net):
   the script's hub URL comes from `api.public_base_url` (HUB_PUBLIC_URL,
   else X-Forwarded-Proto/Host). A first version baked in http://, and the
   proxy's 301 on the upload PUT was taken as success and the local files
   deleted. The script now follows a redirecting hub URL up front (curl
   `%{redirect_url}`), requires HTTP 200 on upload, and re-checks
-  `/api/recordings/{id}` is mp4 before deleting anything local. Script messages
-  are ASCII on purpose (PS 5.1 encoding). Known gap: a corrupt raw fails
-  again on every run (logged, harmless).
+  `/api/recordings/{id}` is mp4 before deleting anything local.
 
 ## Web hub
 
@@ -256,14 +268,16 @@ Observed on the user's hub (https://tiktok.pclo.net) with real data:
   user doesn't want it. Don't propose it again; the reconnect grace window
   prevents new splits instead.
 - Web UI login: hub is LAN-only (see idea 2 below).
+- Scheduled/automatic conversion (nightly Task Scheduler): the user
+  prefers running the one-line command when they want (2026-11-13).
 
 ### Ideas proposed, not yet chosen (2026-11-06)
 
 Ranked by usefulness for how the user works (24/7 recording, converting on
 their own PC, reviewing in the web UI):
 
-1. ~~Auto-convert script~~ - shipped 2026-11-06 (see "Recording
-   pipeline").
+1. ~~Auto-convert script~~ - shipped 2026-11-06, reworked 2026-11-13 into
+   on-demand one-line commands (see "Recording pipeline").
 2. ~~Web UI login~~ - declined 2026-11-12: the hub is only reachable on
    the user's LAN (tiktok.pclo.net resolves internally). Don't propose it
    again unless that changes. (If ever built: the auto-convert script and

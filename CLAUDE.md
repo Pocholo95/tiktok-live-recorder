@@ -97,7 +97,11 @@ copies of the `*.example` files.
 - `/creators` and `/creators/{username}` aggregate by `recordings.username`
   (`recordings_repo.creator_summaries`), so creators whose channel was
   deleted still show up. Timestamps in the DB are UTC (`datetime('now')`);
-  the `ago` filter renders relative times.
+  the `ago` filter renders relative times. Absolute dates are localized
+  in the browser by a script in base.html: `.rec-list` items carry
+  `data-started` and get regrouped under local-day headers ("Hoy",
+  "Ayer", "mié 12 nov"), `[data-utc-date]` elements and `title="... UTC"`
+  tooltips are rewritten; it re-runs on `htmx:afterSettle`.
 - Creator pictures/display names come for free from the room-id lookup
   (`TikTokAPI.last_user_info`, signed via tikrec.com - the original
   project's own signing service). The recorder emits a `profile` status,
@@ -230,14 +234,18 @@ Observed on the user's hub (https://tiktok.pclo.net) with real data:
    page says "Sin un horario fijo" despite a clear 18-24 h pattern and ⚡
    always slows checks. Idea: relative threshold (e.g. usual = p >= 50 %
    of the creator's own peak and >= ~8 %).
-3. **Library date headers use the UTC date** (shows "2026-11-13" for
+3. ~~**Library date headers use the UTC date**~~ - shipped 2026-11-12.
+   Original: (shows "2026-11-13" for
    evening lives of Nov 12 local). Group by the viewer's local date.
-4. **Dashboard unusable on phones**: the table overflows, status and
+4. ~~**Dashboard unusable on phones**~~ - shipped 2026-11-12 (cards
+   under 700 px). Original:: the table overflows, status and
    buttons are off-screen. Needs a card layout under ~700 px.
-5. **"Eliminar" looks the same as "Pausar"** on the dashboard (blue): make
+5. ~~**"Eliminar" looks the same as "Pausar"**~~ - shipped 2026-11-12.
+   Original: on the dashboard (blue): make
    it a danger button, it sits right next to Pausar.
 6. ~~Smart-interval hint shown while recording~~ - hidden, 2026-11-12.
-7. Guests panel lists the same person on several rows when they leave and
+7. ~~Guests panel lists the same person on several rows~~ - shipped
+   2026-11-12 (one row per person, each range clickable). Original: when they leave and
    come back (e.g. @julyyrg22 twice); group rows per person.
 8. Session: the hub flagged "TikTok rechazó la sesión" on @miguelrv777 -
    the user should paste a fresh `sessionid_ss`.

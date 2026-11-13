@@ -595,3 +595,45 @@ def test_dashboard_shows_waiting_for_return(client, app, tmp_path):
     assert "esperando que vuelva" in text
     # The smart-interval hint means nothing while recording: hidden.
     assert "aprendiendo horarios" not in text and "ahora cada" not in text
+
+
+def test_guests_are_grouped_per_person(client, app):
+    from db import participants_repo
+
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    rid = _completed(conn, channel_id, "/output/g.mp4", "mp4")
+    participants_repo.replace_for_recording(
+        conn,
+        rid,
+        [
+            {"username": "julyyrg22", "start_seconds": 1, "end_seconds": 62},
+            {"username": "other", "start_seconds": 62, "end_seconds": None},
+            {"username": "julyyrg22", "start_seconds": 244, "end_seconds": 426},
+        ],
+    )
+
+    text = client.get(f"/library?recording_id={rid}").text
+
+    assert text.count('class="guest" data-guest') == 2  # one row per person
+    assert "2 personas" in text
+    assert "00:00:01 → 00:01:02" in text and "00:04:04 → 00:07:06" in text
+    assert 'data-seek="244' in text  # each range jumps to its own start
+
+
+def test_dates_are_localized_client_side(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    _completed(conn, channel_id, "/output/a.ts", "ts")
+
+    text = client.get("/library").text
+    assert 'data-started="' in text  # raw UTC for the browser to regroup
+    assert "function regroup(list)" in text
+
+
+def test_dashboard_delete_is_a_danger_button(client, app):
+    conn = get_connection(app.state.db_path)
+    channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    text = client.get("/partials/channels").text
+    assert 'class="button-danger row-delete"' in text
+    assert 'data-label="Estado"' in text

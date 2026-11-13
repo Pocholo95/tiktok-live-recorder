@@ -911,3 +911,50 @@ kbd {
 .recording-off-hours { background: rgba(139, 145, 160, 0.18); color: var(--muted); }
 
 .live-info-waiting { color: var(--warn); }
+
+/* ---- Dashboard: delete apart, cards on phones ---------------------- */
+
+.row-actions .row-delete { margin-left: 0.6rem; }
+
+@media (max-width: 700px) {
+  .channels-table thead { display: none; }
+  .channels-table, .channels-table tbody { display: block; }
+  .channels-table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.5rem 0.75rem;
+    padding: 0.85rem 0.9rem;
+    margin-bottom: 0.75rem;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .channels-table td { display: block; padding: 0; border: none; }
+  .channels-table .cell-user { grid-column: 1; font-weight: 600; }
+  .channels-table .cell-mode { grid-column: 2; text-align: right; color: var(--muted); font-size: 0.85rem; }
+  .channels-table .cell-status, .channels-table .cell-interval, .channels-table .row-actions { grid-column: 1 / -1; }
+  .channels-table .cell-interval::before, .channels-table .cell-status::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 0.2rem;
+  }
+  .channels-table .row-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; white-space: normal; }
+  .channels-table .row-actions .row-delete { margin-left: auto; }
+  .add-channel-form > * { flex: 1 1 140px; }
+}
+
+.guest-ranges { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-left: auto; }
+.guest-range {
+  font-size: 0.78rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+button.guest-range { cursor: pointer; }
+button.guest-range:hover { color: var(--text); border-color: var(--accent); opacity: 1; }

@@ -1,8 +1,8 @@
 {% from "partials/macros.html" import avatar %}
 <tr id="channel-row-{{ channel.id }}">
-  <td><a class="creator-link user-cell" href="/creators/{{ channel.username }}">{{ avatar(channel.username, "sm") }}@{{ channel.username }}</a></td>
-  <td>{{ channel.mode }}</td>
-  <td>
+  <td class="cell-user"><a class="creator-link user-cell" href="/creators/{{ channel.username }}">{{ avatar(channel.username, "sm") }}@{{ channel.username }}</a></td>
+  <td class="cell-mode" data-label="Modo">{{ channel.mode }}</td>
+  <td class="cell-interval" data-label="Intervalo">
     <label class="interval-edit" title="Minutos entre revisiones. Se aplica sin cortar una grabación en curso.">
       <input
         type="number" name="minutes" min="1" max="1440" step="1"
@@ -27,7 +27,7 @@
     </div>
     {% endif %}
   </td>
-  <td>
+  <td class="cell-status" data-label="Estado">
     <span class="status-badge status-{{ channel.phase }}">{{ channel.phase_label }}</span>
     {% if channel.live %}
     <div class="live-info">
@@ -65,10 +65,11 @@
       {{ "Pausar" if channel.enabled else "Activar" }}
     </button>
     <button
+      class="button-danger row-delete"
       hx-delete="/channels/{{ channel.id }}"
       hx-target="closest tr"
       hx-swap="outerHTML"
-      hx-confirm="¿Eliminar el canal @{{ channel.username }}?">
+      hx-confirm="¿Eliminar el canal @{{ channel.username }}? Las grabaciones se conservan.">
       Eliminar
     </button>
   </td>

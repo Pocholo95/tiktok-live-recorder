@@ -275,6 +275,19 @@ def _disk_usage(request):
     return {"free": usage.free, "total": usage.total}
 
 
+def _group_guests(participants):
+    """One entry per guest, with all their time ranges, by first appearance."""
+    groups = {}
+    for p in participants:
+        group = groups.setdefault(
+            p["username"], {"username": p["username"], "ranges": [], "seconds": 0.0}
+        )
+        group["ranges"].append({"start": p["start_seconds"], "end": p["end_seconds"]})
+        if p["end_seconds"] is not None:
+            group["seconds"] += p["end_seconds"] - p["start_seconds"]
+    return list(groups.values())
+
+
 def _parse_int(value):
     try:
         return int(value) if value else None
@@ -381,6 +394,15 @@ def library(
         if key in (None, "raw", "ready") or counts[count_key] or state == key
     ]
 
+    participants = [
+        dict(p)
+        for p in (
+            participants_repo.list_for_recording(db, selected_recording["id"])
+            if selected_recording is not None
+            else []
+        )
+    ]
+
     hx_target = request.headers.get("hx-target")
     if hx_target == "library-main":
         template_name = "partials/library_main.html"
@@ -396,14 +418,8 @@ def library(
             "groups": groups,
             "selected_recording": selected_recording,
             "marks": marks,
-            "participants": [
-                dict(p)
-                for p in (
-                    participants_repo.list_for_recording(db, selected_recording["id"])
-                    if selected_recording is not None
-                    else []
-                )
-            ],
+            "participants": participants,
+            "guest_groups": _group_guests(participants),
             "selected_channel_id": channel_id,
             "date_from": date_from,
             "date_to": date_to,

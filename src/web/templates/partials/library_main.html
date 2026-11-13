@@ -24,17 +24,22 @@
   <section class="panel guests-panel">
     <div class="panel-head">
       <h3>Con quién estuvo</h3>
-      <span class="muted">{{ participants | map(attribute="username") | unique | list | length }} persona{{ "s" if (participants | map(attribute="username") | unique | list | length) != 1 else "" }}</span>
+      <span class="muted">{{ guest_groups | length }} persona{{ "s" if guest_groups | length != 1 else "" }}</span>
     </div>
     <ul class="guests">
-      {% for p in participants %}
-      <li class="guest" data-guest data-start="{{ p.start_seconds }}" data-end="{{ p.end_seconds if p.end_seconds is not none else '' }}">
-        {{ avatar(p.username, "xs") }}
-        <a class="creator-link" href="https://www.tiktok.com/@{{ p.username }}" target="_blank" rel="noopener">@{{ p.username }}</a>
-        <span class="mono muted">{{ p.start_seconds | hhmmss }} → {{ (p.end_seconds | hhmmss) if p.end_seconds is not none else ("en curso" if r.status == "recording" else "final") }}</span>
-        {% if r.format == "mp4" and r.status == "completed" %}
-        <button type="button" class="btn btn-ghost btn-small" data-seek="{{ p.start_seconds }}">▶ Ir</button>
-        {% endif %}
+      {% for g in guest_groups %}
+      <li class="guest" data-guest data-ranges='{{ g.ranges | tojson }}'>
+        {{ avatar(g.username, "xs") }}
+        <a class="creator-link" href="https://www.tiktok.com/@{{ g.username }}" target="_blank" rel="noopener">@{{ g.username }}</a>
+        <span class="guest-ranges">
+          {% for range in g.ranges %}
+          {% if r.format == "mp4" and r.status == "completed" %}
+          <button type="button" class="guest-range mono" data-seek="{{ range.start }}" title="Ir a este momento">▶ {{ range.start | hhmmss }} → {{ (range.end | hhmmss) if range.end is not none else "final" }}</button>
+          {% else %}
+          <span class="guest-range mono">{{ range.start | hhmmss }} → {{ (range.end | hhmmss) if range.end is not none else ("en curso" if r.status == "recording" else "final") }}</span>
+          {% endif %}
+          {% endfor %}
+        </span>
       </li>
       {% endfor %}
     </ul>

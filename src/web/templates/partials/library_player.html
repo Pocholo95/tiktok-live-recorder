@@ -127,9 +127,10 @@
       people.appendChild(solo);
     }
     document.querySelectorAll(".guest[data-guest]").forEach((li) => {
-      const start = parseFloat(li.dataset.start);
-      const end = li.dataset.end === "" ? Infinity : parseFloat(li.dataset.end);
-      li.classList.toggle("is-now", t >= start && t < end);
+      let ranges = [];
+      try { ranges = JSON.parse(li.dataset.ranges || "[]"); } catch (e) { ranges = []; }
+      li.classList.toggle("is-now", ranges.some((r) =>
+        t >= r.start && t < (r.end == null ? Infinity : r.end)));
     });
   }
 

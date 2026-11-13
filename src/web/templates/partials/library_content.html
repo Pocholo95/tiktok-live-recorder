@@ -59,6 +59,7 @@
           hx-swap="outerHTML"
           hx-push-url="true"
           data-recording-id="{{ recording.id }}"
+          data-started="{{ recording.started_at }}"
           class="rec-item{% if selected_recording and recording.id == selected_recording.id %} active{% endif %}">
           <div class="rec-thumb">
             <img src="/media/{{ recording.id }}/thumbnail" alt="" loading="lazy">

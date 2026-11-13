@@ -18,5 +18,57 @@
   <main class="container">
     {% block content %}{% endblock %}
   </main>
+<script>
+// The DB stores UTC; show dates in the viewer's own time zone. Runs on load
+// and after every htmx swap. Server-rendered values stay as a fallback.
+(function () {
+  const parse = (v) => new Date(String(v).slice(0, 19).replace(" ", "T") + "Z");
+  const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  function dayLabel(d) {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    if (dayKey(d) === dayKey(today)) return "Hoy";
+    if (dayKey(d) === dayKey(yesterday)) return "Ayer";
+    const opts = { weekday: "short", day: "numeric", month: "short" };
+    if (d.getFullYear() !== today.getFullYear()) opts.year = "numeric";
+    return d.toLocaleDateString("es", opts).replace(/\./g, "");
+  }
+
+  function regroup(list) {
+    const items = [...list.querySelectorAll(".rec-item[data-started]")];
+    if (!items.length) return;
+    list.querySelectorAll(".rec-date").forEach((h) => h.remove());
+    let last = null;
+    items.forEach((item) => {
+      const d = parse(item.dataset.started);
+      if (isNaN(d)) return;
+      const key = dayKey(d);
+      if (key !== last) {
+        const header = document.createElement("div");
+        header.className = "rec-date";
+        header.textContent = dayLabel(d);
+        item.before(header);
+        last = key;
+      }
+    });
+  }
+
+  function localize(root) {
+    root.querySelectorAll(".rec-list").forEach(regroup);
+    root.querySelectorAll("[data-utc-date]").forEach((el) => {
+      const d = parse(el.dataset.utcDate);
+      if (!isNaN(d)) el.textContent = dayLabel(d);
+    });
+    root.querySelectorAll("[title$=' UTC']").forEach((el) => {
+      const d = parse(el.title);
+      if (!isNaN(d)) el.title = d.toLocaleString("es");
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => localize(document));
+  document.addEventListener("htmx:afterSettle", () => localize(document));
+})();
+</script>
 </body>
 </html>

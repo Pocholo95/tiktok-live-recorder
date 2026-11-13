@@ -137,7 +137,7 @@
     <div class="rec-card-info">
       <strong title="{{ r.started_at }} UTC">{{ r.started_at | ago }}</strong>
       <span class="muted">
-        {{ r.started_at[:10] }}
+        <span data-utc-date="{{ r.started_at }}">{{ r.started_at[:10] }}</span>
         {% if r.file_size_bytes %}· {{ r.file_size_bytes | filesize }}{% endif %}
         {% if r.clip_count %}· {{ r.clip_count }} clip{{ "s" if r.clip_count != 1 else "" }}{% endif %}
       </span>

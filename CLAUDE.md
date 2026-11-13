@@ -191,6 +191,41 @@ Agreed but not built yet. Move items out of here when they ship.
   anonymously (never pass the session), some IP rate-limit risk shared
   with the recorder, depends on Euler Stream signing, protocol churn.
 
+### Findings from the live UI review (2026-11-12, not yet chosen)
+
+Observed on the user's hub (https://tiktok.pclo.net) with real data:
+
+1. **A live is split into many recordings** (highest priority). Today
+   @miguelrv777 produced 7 recordings 2 min apart (the 2 min = smart
+   interval "unusual" = double of 1 min); ~2 min of video lost per cut,
+   and the library/lives counts/schedule get inflated. Causes: the creator
+   ends and restarts a few minutes later (user says this is very common),
+   or TikTok briefly reports the room as not alive/paused
+   (`is_room_alive` requires status 2; upstream `develop` has "handle
+   paused and HLS live streams"). Idea: a grace window after a live ends -
+   keep the recording open, check fast (~15-20 s) for N minutes (default
+   ~5), re-resolve the room id, and append to the same .ts if they come
+   back; plus a fast-check window after a live ends regardless of the smart
+   interval. Optionally group consecutive recordings as one session in UI.
+2. **Smart interval never sees "usual" hours for creators who don't stream
+   daily.** @miguelrv777's peak is 17 % (< 30 % fixed threshold), so the
+   page says "Sin un horario fijo" despite a clear 18-24 h pattern and ⚡
+   always slows checks. Idea: relative threshold (e.g. usual = p >= 50 %
+   of the creator's own peak and >= ~8 %).
+3. **Library date headers use the UTC date** (shows "2026-11-13" for
+   evening lives of Nov 12 local). Group by the viewer's local date.
+4. **Dashboard unusable on phones**: the table overflows, status and
+   buttons are off-screen. Needs a card layout under ~700 px.
+5. **"Eliminar" looks the same as "Pausar"** on the dashboard (blue): make
+   it a danger button, it sits right next to Pausar.
+6. Smart-interval hint ("ahora cada 2 min · fuera de horario") is shown
+   while the channel is recording, where it means nothing: hide or say
+   "grabando".
+7. Guests panel lists the same person on several rows when they leave and
+   come back (e.g. @julyyrg22 twice); group rows per person.
+8. Session: the hub flagged "TikTok rechazó la sesión" on @miguelrv777 -
+   the user should paste a fresh `sessionid_ss`.
+
 ### Ideas proposed, not yet chosen (2026-11-06)
 
 Ranked by usefulness for how the user works (24/7 recording, converting on

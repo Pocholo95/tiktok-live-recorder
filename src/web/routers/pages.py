@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
 
 from db import (
@@ -304,6 +304,7 @@ def library(
     date_from: str | None = None,
     date_to: str | None = None,
     no_clips: str | None = None,
+    clips: str | None = None,
     state: str | None = None,
     db=Depends(get_db),
     templates=Depends(get_templates),
@@ -313,7 +314,9 @@ def library(
     # int-typed FastAPI params would 422 on "" instead of treating it as None.
     recording_id = _parse_int(recording_id)
     channel_id = _parse_int(channel_id)
-    no_clips_only = no_clips not in (None, "", "0", "false")
+    # `clips=with|without`; the old `no_clips=1` checkbox still works.
+    if clips not in ("with", "without"):
+        clips = "without" if no_clips not in (None, "", "0", "false") else None
     state = state if state in ("raw", "ready", "recording", "failed") else None
 
     channels = channels_repo.list_all(db)
@@ -329,8 +332,20 @@ def library(
     guests = participants_repo.usernames_for_recordings(
         db, [r["id"] for r in recordings]
     )
-    if no_clips_only:
+    if clips == "without":
         recordings = [r for r in recordings if counts.get(r["id"], 0) == 0]
+    elif clips == "with":
+        recordings = [r for r in recordings if counts.get(r["id"], 0) > 0]
+    # "Sin clips" offers to delete them in one go - only finished MP4s: raw
+    # ones can't have clips yet and ongoing recordings are never touched.
+    cleanup = None
+    if clips == "without":
+        doomed = [r for r in recordings if _bulk_deletable(r)]
+        cleanup = {
+            "ids": [r["id"] for r in doomed],
+            "size": sum(r["file_size_bytes"] or 0 for r in doomed),
+            "skipped": len(recordings) - len(doomed),
+        }
 
     groups = []
     current_date = None
@@ -368,7 +383,7 @@ def library(
         "channel_id": channel_id,
         "date_from": date_from,
         "date_to": date_to,
-        "no_clips": "1" if no_clips_only else None,
+        "clips": clips,
         "state": state,
     }
     filter_params = {k: v for k, v in filter_params.items() if v not in (None, "")}
@@ -424,7 +439,8 @@ def library(
             "selected_channel_id": channel_id,
             "date_from": date_from,
             "date_to": date_to,
-            "no_clips_only": no_clips_only,
+            "clips": clips,
+            "cleanup": cleanup,
             "state": state,
             "off_hours": _is_off_hours(db, selected_recording),
             "counts": counts,
@@ -440,21 +456,53 @@ def library(
     )
 
 
+def _delete_recording_files(db, recording):
+    if recording["file_path"]:
+        Path(recording["file_path"]).unlink(missing_ok=True)
+        Path(recording["file_path"]).with_suffix(".participants.jsonl").unlink(
+            missing_ok=True
+        )
+    if recording["thumbnail_path"]:
+        Path(recording["thumbnail_path"]).unlink(missing_ok=True)
+    recordings_repo.delete(db, recording["id"])
+
+
+def _bulk_deletable(recording):
+    return recording["status"] == "completed" and recording["format"] == "mp4"
+
+
 @router.delete("/recordings/{recording_id}")
 def delete_recording(recording_id: int, db=Depends(get_db)):
     recording = recordings_repo.get(db, recording_id)
     if recording is not None:
-        if recording["file_path"]:
-            Path(recording["file_path"]).unlink(missing_ok=True)
-        if recording["thumbnail_path"]:
-            Path(recording["thumbnail_path"]).unlink(missing_ok=True)
-        if recording["file_path"]:
-            Path(recording["file_path"]).with_suffix(".participants.jsonl").unlink(
-                missing_ok=True
-            )
-        recordings_repo.delete(db, recording_id)
+        _delete_recording_files(db, recording)
 
     return PlainTextResponse("")
+
+
+@router.post("/recordings/delete-without-clips")
+def delete_recordings_without_clips(
+    ids: list[int] = Body(..., embed=True), db=Depends(get_db)
+):
+    """
+    Bulk delete from the library's "Sin clips" view. The page sends the
+    ids it showed; each one is checked again here (still a finished MP4,
+    still no clip marks), so a clip saved in another tab meanwhile, or a
+    recording that changed state, is kept.
+    """
+    counts = clip_marks_repo.count_for_recordings(db, ids)
+    deleted, kept, freed = 0, 0, 0
+    for recording_id in dict.fromkeys(ids):
+        recording = recordings_repo.get(db, recording_id)
+        if recording is None:
+            continue
+        if counts.get(recording_id, 0) or not _bulk_deletable(recording):
+            kept += 1
+            continue
+        freed += recording["file_size_bytes"] or 0
+        _delete_recording_files(db, recording)
+        deleted += 1
+    return {"deleted": deleted, "kept": kept, "freed_bytes": freed}
 
 
 @router.get("/recordings/{recording_id}/clip")

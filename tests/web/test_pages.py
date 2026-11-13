@@ -656,3 +656,72 @@ def test_library_is_video_first_and_full_width(client, app):
     assert text.index('class="rec-media"') < text.index('class="rec-side"')
     assert text.index('id="clip-video"') < text.index("Con quién estuvo")
     assert text.count("Con quién estuvo") == 1
+
+
+def _finished(conn, channel_id, name, fmt="mp4", clips=0, tmp=None):
+    path = str(tmp / name) if tmp else f"/output/{name}"
+    if tmp:
+        Path(path).write_bytes(b"x")
+    rid = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path=path
+    )
+    recordings_repo.mark_completed(
+        conn, rid, file_path=path, format=fmt, file_size_bytes=1000
+    )
+    for i in range(clips):
+        clip_marks_repo.insert(
+            conn, recording_id=rid, start_seconds=i, end_seconds=i + 1, label=None
+        )
+    return rid, path
+
+
+def test_library_filters_recordings_with_clips(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    with_clip, _ = _finished(conn, channel_id, "a.mp4", clips=2)
+    without_clip, _ = _finished(conn, channel_id, "b.mp4")
+
+    text = client.get("/library?clips=with").text
+
+    assert f"recording_id={with_clip}" in text
+    assert f"recording_id={without_clip}" not in text
+    assert "✂ 2" in text
+    assert 'id="cleanup"' not in text  # bulk delete only in the "sin clips" view
+
+
+def test_without_clips_view_offers_to_delete_only_finished_mp4s(client, app):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    mp4, _ = _finished(conn, channel_id, "a.mp4")
+    raw, _ = _finished(conn, channel_id, "b.ts", fmt="ts")
+
+    text = client.get("/library?clips=without").text
+
+    assert f'data-ids="[{mp4}]"' in text
+    assert "Eliminar 1 sin clips" in text
+    assert "1 sin convertir o grabando no se tocan" in text
+    assert f"recording_id={raw}" in text  # still listed, just not deleted
+
+
+def test_bulk_delete_rechecks_each_recording(client, app, tmp_path):
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    doomed, doomed_path = _finished(conn, channel_id, "a.mp4", tmp=tmp_path)
+    clipped, clipped_path = _finished(conn, channel_id, "b.mp4", clips=1, tmp=tmp_path)
+    raw, raw_path = _finished(conn, channel_id, "c.ts", fmt="ts", tmp=tmp_path)
+    live = recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path="/output/d.ts"
+    )
+
+    response = client.post(
+        "/recordings/delete-without-clips",
+        json={"ids": [doomed, clipped, raw, live, 999]},
+    )
+
+    assert response.json() == {"deleted": 1, "kept": 3, "freed_bytes": 1000}
+    assert recordings_repo.get(conn, doomed) is None
+    assert not Path(doomed_path).exists()
+    for rid, path in ((clipped, clipped_path), (raw, raw_path)):
+        assert recordings_repo.get(conn, rid) is not None
+        assert Path(path).exists()
+    assert recordings_repo.get(conn, live) is not None

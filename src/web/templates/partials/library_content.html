@@ -62,11 +62,37 @@
           <span class="muted">→</span>
           <input type="date" name="date_to" value="{{ date_to or '' }}" aria-label="Hasta">
         </div>
-        <label class="filter-checkbox">
-          <input type="checkbox" name="no_clips" value="1" {% if no_clips_only %}checked{% endif %}>
-          Solo sin clips
-        </label>
+        <select name="clips" aria-label="Clips">
+          <option value="">Con y sin clips</option>
+          <option value="with" {% if clips == "with" %}selected{% endif %}>✂ Solo con clips</option>
+          <option value="without" {% if clips == "without" %}selected{% endif %}>Solo sin clips</option>
+        </select>
       </form>
+
+      {% if cleanup %}
+      <div class="cleanup" id="cleanup" data-ids="{{ cleanup.ids | tojson }}">
+        {% if cleanup.ids %}
+        <button type="button" class="btn btn-danger btn-small cleanup-start" data-cleanup-step="1">
+          🗑 Eliminar {{ cleanup.ids | length }} sin clips…
+        </button>
+        <div class="cleanup-confirm" hidden>
+          <p>
+            Se van a borrar <strong>{{ cleanup.ids | length }} grabación{{ "es" if cleanup.ids | length != 1 else "" }}</strong>
+            sin clips ({{ cleanup.size | filesize }}){% if selected_channel_id or date_from or date_to %} de este filtro{% endif %}.
+            No se puede deshacer.
+          </p>
+          <div class="cleanup-actions">
+            <button type="button" class="btn btn-danger btn-small" data-cleanup-step="2">Sí, eliminar {{ cleanup.ids | length }}</button>
+            <button type="button" class="btn btn-ghost btn-small" data-cleanup-cancel>Cancelar</button>
+          </div>
+        </div>
+        {% endif %}
+        {% if cleanup.skipped %}
+        <p class="hint">{{ cleanup.skipped }} sin convertir o grabando no se tocan.</p>
+        {% endif %}
+        <p class="cleanup-status" role="status"></p>
+      </div>
+      {% endif %}
 
       <div class="rec-list">
         {% for group in groups %}
@@ -88,12 +114,12 @@
           <div class="rec-info">
             <div class="rec-top">
               <strong>@{{ recording.username }}</strong>
+              {% if recording.clip_count %}<span class="pill pill-clips" title="{{ recording.clip_count }} clip{{ 's' if recording.clip_count != 1 else '' }} guardado{{ 's' if recording.clip_count != 1 else '' }}">✂ {{ recording.clip_count }}</span>{% endif %}
               {{ state_pill(recording) }}
             </div>
             <div class="rec-meta">
               <span title="{{ recording.started_at }} UTC">{{ recording.started_at | ago }}</span>
               {% if recording.file_size_bytes %}· {{ recording.file_size_bytes | filesize }}{% endif %}
-              {% if recording.clip_count %}· {{ recording.clip_count }} clip{{ "s" if recording.clip_count != 1 else "" }}{% endif %}
             </div>
             {% if recording.guests %}
             <div class="rec-guests" title="con @{{ recording.guests | join(', @') }}">con @{{ recording.guests | join(", @") }}</div>

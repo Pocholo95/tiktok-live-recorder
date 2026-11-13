@@ -115,6 +115,13 @@ copies of the `*.example` files.
   recording click, `HX-Target: library-main`) so the sidebar keeps its
   scroll position. Library states: raw / ready (mp4) / recording / failed
   (`recordings_repo._STATE_FILTERS`).
+- Clips = saved clip marks (`clip_marks`). Library filter `clips=with|without`
+  (old `no_clips=1` still maps to without); items show a "✂ N" pill. The
+  "Sin clips" view offers a bulk delete (user request 2026-11-13, "doble
+  check"): a button, then an inline "Sí, eliminar N" confirmation, then
+  `POST /recordings/delete-without-clips` re-checks every id server-side
+  (still a finished MP4, still zero marks) and keeps anything that
+  changed. Raw and recording rows are listed but never bulk-deleted.
 - `/creators` and `/creators/{username}` aggregate by `recordings.username`
   (`recordings_repo.creator_summaries`), so creators whose channel was
   deleted still show up. Timestamps in the DB are UTC (`datetime('now')`);

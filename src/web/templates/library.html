@@ -105,6 +105,52 @@ document.addEventListener("click", (e) => {
   video.scrollIntoView({ behavior: "smooth", block: "center" });
 });
 
+// "Sin clips" view: delete every listed recording without clips. Two
+// clicks (button, then "Sí, eliminar N"), and the server re-checks each one.
+document.addEventListener("click", (e) => {
+  const box = e.target.closest("#cleanup");
+  if (!box) return;
+  const confirmEl = box.querySelector(".cleanup-confirm");
+  const start = box.querySelector(".cleanup-start");
+  const statusEl = box.querySelector(".cleanup-status");
+  if (e.target.closest("[data-cleanup-cancel]")) {
+    confirmEl.hidden = true;
+    start.hidden = false;
+    return;
+  }
+  const step = e.target.closest("[data-cleanup-step]");
+  if (!step) return;
+  if (step.dataset.cleanupStep === "1") {
+    start.hidden = true;
+    confirmEl.hidden = false;
+    return;
+  }
+  step.disabled = true;
+  statusEl.className = "cleanup-status";
+  statusEl.textContent = "Eliminando…";
+  fetch("/recordings/delete-without-clips", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids: JSON.parse(box.dataset.ids) }),
+  })
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then((result) => {
+      let message = `Listo: ${result.deleted} eliminada${result.deleted === 1 ? "" : "s"}.`;
+      if (result.kept) message += ` ${result.kept} se conservaron (ya tenían clips o cambiaron de estado).`;
+      return htmx.ajax("GET", location.pathname + location.search, {
+        target: "#library-content", swap: "outerHTML",
+      }).then(() => {
+        const fresh = document.querySelector("#cleanup .cleanup-status");
+        if (fresh) fresh.textContent = message;
+      });
+    })
+    .catch(() => {
+      step.disabled = false;
+      statusEl.className = "cleanup-status is-error";
+      statusEl.textContent = "No se pudo completar. Recargá la página para ver qué quedó.";
+    });
+});
+
 // Delete lives in the (htmx-swapped) recording header for every state, so
 // handle it once here by delegation instead of per swapped-in script.
 document.addEventListener("click", (e) => {

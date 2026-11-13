@@ -30,6 +30,11 @@ MIN_DAYS = 7
 MIN_WEEKS = 3
 WEEKDAY_PRIOR_DAYS = 2  # how strongly per-weekday values lean on the overall pattern
 USUAL_THRESHOLD = 0.30
+# Creators who don't stream every day never reach 30 % at any hour, so an
+# hour is also "usual" when it reaches half of the creator's own best hour,
+# as long as that is at least MIN_USUAL (noise floor).
+RELATIVE_TO_PEAK = 0.5
+MIN_USUAL = 0.08
 NEIGHBOR_CREDIT = 0.5
 FAST_FACTOR = 0.5  # usual hours: half the channel interval...
 FAST_MIN_MINUTES = 1  # ...but at least 1 min
@@ -90,6 +95,7 @@ def compute(spans, observed_since, now=None):
         "days": int(days),
         "mode": None,
         "probs": [0.0] * 168,
+        "threshold": USUAL_THRESHOLD,
     }
     if not spans:
         return result
@@ -138,7 +144,14 @@ def compute(spans, observed_since, now=None):
                 ) / (per_weekday.get(weekday, 0.0) + WEEKDAY_PRIOR_DAYS)
                 p = max(weekday_p, daily_p)
             result["probs"][weekday * 24 + hour] = min(1.0, p)
+    result["threshold"] = usual_threshold(result["probs"])
     return result
+
+
+def usual_threshold(probs):
+    """Probability from which an hour counts as usual for this creator."""
+    peak = max(probs) if probs else 0.0
+    return min(USUAL_THRESHOLD, max(MIN_USUAL, peak * RELATIVE_TO_PEAK))
 
 
 def probability_at(schedule, moment):
@@ -147,7 +160,8 @@ def probability_at(schedule, moment):
 
 
 def is_usual(schedule, moment):
-    return schedule["learned"] and probability_at(schedule, moment) >= USUAL_THRESHOLD
+    threshold = schedule.get("threshold", USUAL_THRESHOLD)
+    return schedule["learned"] and probability_at(schedule, moment) >= threshold
 
 
 def smart_interval(base_minutes, schedule, moment):

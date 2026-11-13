@@ -124,3 +124,24 @@ def test_lives_today_only_count_from_tomorrow():
         [(start, start + timedelta(hours=1))], NOW - timedelta(days=3), now=NOW
     )
     assert s["probs"] == [0.0] * 168
+
+
+def test_part_time_creator_still_gets_usual_hours():
+    # Like @miguelrv777: evenings, but only ~1 day in 4 -> peak far below 30 %.
+    spans = []
+    for d in (2, 6, 10, 14, 18):
+        start = (NOW - timedelta(days=d)).replace(hour=20, minute=10)
+        spans.append((start, start + timedelta(hours=2)))
+    s = schedule.compute(spans, NOW - timedelta(days=20), now=NOW)
+
+    assert s["learned"] and max(s["probs"]) < schedule.USUAL_THRESHOLD
+    assert s["threshold"] < schedule.USUAL_THRESHOLD
+    assert schedule.is_usual(s, NOW.replace(hour=21))
+    assert not schedule.is_usual(s, NOW.replace(hour=11))
+    assert schedule.smart_interval(4, s, NOW.replace(hour=21)) == (2, "usual")
+
+
+def test_relative_threshold_has_a_noise_floor():
+    assert schedule.usual_threshold([0.04] * 168) == schedule.MIN_USUAL
+    assert schedule.usual_threshold([0.0] * 167 + [1.0]) == schedule.USUAL_THRESHOLD
+    assert schedule.usual_threshold([0.0] * 167 + [0.2]) == 0.1

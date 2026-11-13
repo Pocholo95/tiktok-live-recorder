@@ -804,7 +804,7 @@ def _schedule_view(db, username):
     return {
         **learned,
         "probs": [round(p, 3) for p in learned["probs"]],
-        "threshold": schedule_core.USUAL_THRESHOLD,
+        "threshold": learned.get("threshold", schedule_core.USUAL_THRESHOLD),
         "min_lives": schedule_core.MIN_LIVES,
         "min_days": schedule_core.MIN_DAYS,
     }

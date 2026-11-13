@@ -166,7 +166,10 @@ copies of the `*.example` files.
   - Learned after 5 lives over 7 days. Probability per hour of the week =
     weighted share of days live at that hour (half-life 30 days, ±1 h at
     half credit so checks speed up just before the usual start). "Usual"
-    = >= 30 %. Only complete days count (a live today counts from
+    = >= 30 %, or >= half of the creator's own peak hour (floor 8 %) -
+    added 2026-11-12 because creators who don't stream daily (peak 17 %)
+    never reached 30 % and ⚡ only ever slowed them down
+    (`schedule.usual_threshold`, stored as `threshold` in the result). Only complete days count (a live today counts from
     tomorrow). Per-weekday values (after 3 weeks of every weekday) are
     shrunk toward the pooled hour-of-day pattern (prior of 2 days) and
     the max of both is used - one odd Friday can't make an hour usual.
@@ -222,8 +225,8 @@ Observed on the user's hub (https://tiktok.pclo.net) with real data:
    ~5), re-resolve the room id, and append to the same .ts if they come
    back; plus a fast-check window after a live ends regardless of the smart
    interval. Optionally group consecutive recordings as one session in UI.
-2. **Smart interval never sees "usual" hours for creators who don't stream
-   daily.** @miguelrv777's peak is 17 % (< 30 % fixed threshold), so the
+2. ~~**Smart interval never sees "usual" hours for creators who don't
+   stream daily**~~ - shipped 2026-11-12 (relative threshold). Original: @miguelrv777's peak is 17 % (< 30 % fixed threshold), so the
    page says "Sin un horario fijo" despite a clear 18-24 h pattern and ⚡
    always slows checks. Idea: relative threshold (e.g. usual = p >= 50 %
    of the creator's own peak and >= ~8 %).
@@ -239,6 +242,13 @@ Observed on the user's hub (https://tiktok.pclo.net) with real data:
 8. Session: the hub flagged "TikTok rechazó la sesión" on @miguelrv777 -
    the user should paste a fresh `sessionid_ss`.
 
+### Declined by the user
+
+- Merging existing split recordings into one (proposed 2026-11-12): the
+  user doesn't want it. Don't propose it again; the reconnect grace window
+  prevents new splits instead.
+- Web UI login: hub is LAN-only (see idea 2 below).
+
 ### Ideas proposed, not yet chosen (2026-11-06)
 
 Ranked by usefulness for how the user works (24/7 recording, converting on
@@ -246,11 +256,11 @@ their own PC, reviewing in the web UI):
 
 1. ~~Auto-convert script~~ - shipped 2026-11-06 (see "Recording
    pipeline").
-2. Web UI login (user/password from `.env`): the hub now stores the TikTok
-   session and the Discord webhook and has no auth at all. When built, the
-   auto-convert script and its `/api/*` + `/media/*/download` +
-   `/recordings/*/converted` calls must authenticate too (e.g. a token
-   param baked into the downloaded script), or nightly runs break.
+2. ~~Web UI login~~ - declined 2026-11-12: the hub is only reachable on
+   the user's LAN (tiktok.pclo.net resolves internally). Don't propose it
+   again unless that changes. (If ever built: the auto-convert script and
+   its `/api/*`, `/media/*/download`, `/recordings/*/converted` calls must
+   authenticate too.)
 3. Disk care: Discord alert below a free-space threshold; optional cleanup
    of old raws / recordings older than N days, per channel.
 4. ~~Problem alerts on Discord~~ - shipped 2026-11-06.

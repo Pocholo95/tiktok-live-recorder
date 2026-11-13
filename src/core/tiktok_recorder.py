@@ -14,6 +14,10 @@ from utils.logger_manager import logger
 from utils.recorder_config import RecorderConfig
 
 
+POST_LIVE_FAST_SECONDS = 15 * 60
+GRACE_POLL_SECONDS = 15
+
+
 class TikTokRecorder:
     def __init__(self, config: RecorderConfig):
         self.tiktok = TikTokAPI(proxy=config.proxy, cookies=config.cookies)
@@ -37,6 +41,9 @@ class TikTokRecorder:
         # plain CLI has nowhere to put them, so don't poll TikTok for them.
         self._track_participants = config.on_status is not None
         self._participants_interval = config.participants_interval
+        self._reconnect_grace_getter = config.reconnect_grace_getter
+        self._last_live_end = None
+        self._tracker = None
 
     @property
     def automatic_interval(self):
@@ -45,14 +52,22 @@ class TikTokRecorder:
         channel's DB row before every wait, so editing it in the dashboard
         takes effect without restarting the worker (or cutting a recording).
         """
+        value = self._automatic_interval
         if self._automatic_interval_getter is not None:
             try:
-                value = int(self._automatic_interval_getter())
-                if value >= 1:
-                    return value
+                got = int(self._automatic_interval_getter())
+                if got >= 1:
+                    value = got
             except Exception:
                 pass
-        return self._automatic_interval
+        # Right after a live ends creators often come back a bit later:
+        # check every minute for a while, whatever the (smart) interval says.
+        if (
+            self._last_live_end is not None
+            and time.time() - self._last_live_end < POST_LIVE_FAST_SECONDS
+        ):
+            value = min(value, 1)
+        return value
 
     @automatic_interval.setter
     def automatic_interval(self, value):
@@ -255,6 +270,7 @@ class TikTokRecorder:
         self._on_status("recording_started", user=user, file_path=output)
 
         tracker = self._start_participant_tracker(user, room_id, output)
+        self._tracker = tracker
         try:
             self._record_stream(user, room_id, live_urls, output)
         finally:
@@ -262,6 +278,8 @@ class TikTokRecorder:
             # ranges still land on this recording.
             if tracker is not None:
                 tracker.stop()
+            self._tracker = None
+            self._last_live_end = time.time()
         self._on_status("recording_finished", user=user, file_path=output, format="ts")
 
     def _start_participant_tracker(self, user, room_id, output):
@@ -293,6 +311,53 @@ class TikTokRecorder:
             logger.warning(f"Guest name tracking not started: {e}")
             return None
 
+    def _reconnect_grace(self):
+        if self._reconnect_grace_getter is None:
+            return 0
+        try:
+            return max(0, int(self._reconnect_grace_getter()))
+        except Exception:
+            return 0
+
+    def _wait_for_return(self, user):
+        """
+        The live looks over. Within the grace window, poll often for the
+        creator to be live again - possibly in a NEW room (they ended and
+        restarted) - and return (room_id, live_url) to keep appending to the
+        same file, or None to finish the recording. Any error just counts as
+        "not back yet".
+        """
+        grace = self._reconnect_grace()
+        if grace <= 0:
+            return None
+        deadline = time.time() + grace
+        logger.info(f"@{user} went offline; waiting up to {grace}s for them to return")
+        self._on_status("waiting_return", user=user, until=deadline)
+        try:
+            while time.time() < deadline and not self._stopped():
+                self._wait(min(GRACE_POLL_SECONDS, max(1, deadline - time.time())))
+                if self._stopped():
+                    return None
+                try:
+                    room_id = self.tiktok.get_room_id_from_user(user)
+                    if not room_id or not self.tiktok.is_room_alive(room_id):
+                        continue
+                    urls = self.tiktok.get_live_url_candidates(room_id, user=user)
+                    if not urls:
+                        continue
+                except Exception as e:
+                    logger.debug(f"Still waiting for @{user}: {e}")
+                    continue
+                if self._tracker is not None:
+                    try:
+                        self._tracker.set_room(room_id)
+                    except Exception as e:  # guest names never affect recording
+                        logger.warning(f"Guest tracking not moved to new room: {e}")
+                return room_id, urls[0]
+            return None
+        finally:
+            self._on_status("waiting_return_done", user=user)
+
     def _record_stream(self, user, room_id, live_urls, output):
         min_stream_bytes = 4096
         for index, live_url in enumerate(live_urls, start=1):
@@ -319,8 +384,17 @@ class TikTokRecorder:
                 while not stop_recording:
                     try:
                         if not self.tiktok.is_room_alive(room_id):
-                            logger.info("User is no longer live. Stopping recording.")
-                            break
+                            resumed = self._wait_for_return(user)
+                            if resumed is None:
+                                logger.info(
+                                    "User is no longer live. Stopping recording."
+                                )
+                                break
+                            room_id, live_url = resumed
+                            logger.info(
+                                f"@{user} is back (room {room_id}): continuing "
+                                "the same recording."
+                            )
 
                         if self._stopped():
                             logger.info("Stop requested. Stopping recording.")

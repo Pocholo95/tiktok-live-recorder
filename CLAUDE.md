@@ -40,6 +40,19 @@ copies of the `*.example` files.
     Pure Python, tag-level, no decoding.
   - `TsRemuxer` pipes that through `ffmpeg -c copy` into an MPEG-TS file,
     restarting ffmpeg (with cached codec headers) if it dies.
+- Reconnect grace (hub only): when `is_room_alive` says the live is over,
+  `TikTokRecorder._wait_for_return` keeps the file open for
+  `reconnect_grace_seconds` (Settings "Si el live se corta", default 300 s,
+  0-1800; CLI = 0), polling every 15 s with a fresh
+  `get_room_id_from_user` (a restarted live has a NEW room id). If the
+  creator is back it appends to the same .ts (FlvNormalizer splices it)
+  and moves the guest tracker to the new room (`set_room`, errors
+  swallowed). Status flag `waiting_return_until` drives the dashboard
+  "esperando que vuelva" and makes the health monitor skip stall checks.
+  After any live ends the channel is checked every 1 min for 15 min
+  (`POST_LIVE_FAST_SECONDS`), overriding the smart interval. Motivation:
+  the user's channels produced a new recording every few minutes with
+  ~2 min lost per cut (2026-11-12 review).
 - Recordings finish as `format = 'ts'`. Old ones may be `flv` (pre-fork
   raw) or `mp4` (old server-side transcodes).
 - The user converts on their own PC (RTX 4070, NVENC) and uploads the MP4:
@@ -195,7 +208,9 @@ Agreed but not built yet. Move items out of here when they ship.
 
 Observed on the user's hub (https://tiktok.pclo.net) with real data:
 
-1. **A live is split into many recordings** (highest priority). Today
+1. ~~**A live is split into many recordings**~~ - shipped 2026-11-12
+   (reconnect grace + post-live fast checks, see "Recording pipeline").
+   Original finding: Today
    @miguelrv777 produced 7 recordings 2 min apart (the 2 min = smart
    interval "unusual" = double of 1 min); ~2 min of video lost per cut,
    and the library/lives counts/schedule get inflated. Causes: the creator
@@ -218,9 +233,7 @@ Observed on the user's hub (https://tiktok.pclo.net) with real data:
    buttons are off-screen. Needs a card layout under ~700 px.
 5. **"Eliminar" looks the same as "Pausar"** on the dashboard (blue): make
    it a danger button, it sits right next to Pausar.
-6. Smart-interval hint ("ahora cada 2 min · fuera de horario") is shown
-   while the channel is recording, where it means nothing: hide or say
-   "grabando".
+6. ~~Smart-interval hint shown while recording~~ - hidden, 2026-11-12.
 7. Guests panel lists the same person on several rows when they leave and
    come back (e.g. @julyyrg22 twice); group rows per person.
 8. Session: the hub flagged "TikTok rechazó la sesión" on @miguelrv777 -

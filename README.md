@@ -155,6 +155,15 @@ converts everything still pending with your GPU (same command as the
 library page), uploads each MP4 and cleans up; a failure on one recording
 leaves its raw file untouched and moves on. Needs ffmpeg in PATH.
 
+### When a live drops and comes back
+
+Creators often end a live and start again a few minutes later, and TikTok
+sometimes reports a live as briefly not running. Instead of closing the
+recording right away, the hub keeps it open for a while (Settings → *Si el
+live se corta*, default 5 min), checking every 15 s; if the creator is back
+- even in a brand-new live - it keeps writing to the same recording. After
+a live ends the channel is also checked every minute for 15 minutes.
+
 ### Learned live hours and smart interval
 
 Each creator page shows when they usually go live (heatmap and summary in

@@ -6,6 +6,7 @@
 {% if saved == "cookies" %}<p class="saved-banner">cookies.json actualizado.</p>{% endif %}
 {% if saved == "telegram" %}<p class="saved-banner">telegram.json actualizado.</p>{% endif %}
 {% if saved == "participants" %}<p class="saved-banner">Intervalo guardado: se aplica también a los lives que se están grabando.</p>{% endif %}
+{% if saved == "reconnect-grace" %}<p class="saved-banner">Espera guardada: se aplica desde el próximo corte, también en lives que se están grabando.</p>{% endif %}
 {% if saved == "problem-alerts" %}<p class="saved-banner">Preferencia de avisos de problemas guardada.</p>{% endif %}
 {% if saved == "discord" %}<p class="saved-banner">Webhook de Discord guardado. Probalo con "Enviar aviso de prueba".</p>{% endif %}
 {% if saved == "discord-cleared" %}<p class="saved-banner">Webhook de Discord quitado: no se van a mandar avisos.</p>{% endif %}
@@ -42,6 +43,23 @@
   {% endif %}
 </p>
 {% endif %}
+
+<h2>Si el live se corta</h2>
+<p class="hint settings-intro">
+  Es muy común que el creador corte y vuelva a prender a los pocos minutos, o que
+  TikTok lo marque un momento como "pausado". Durante esta espera el hub sigue
+  revisando cada 15 s y, si vuelve, continúa en <strong>la misma grabación</strong>
+  en vez de empezar otra. Después, sigue revisando cada 1 min durante 15 min.
+  Con 0 la grabación se cierra apenas termina el live.
+</p>
+<form method="post" action="/settings/reconnect-grace" class="settings-form">
+  <label>
+    Esperar que vuelva (minutos)
+    <span class="hint">entre 0 y 30 · recomendado 5</span>
+    <input type="number" name="minutes" value="{{ grace_minutes | int if grace_minutes == grace_minutes | int else grace_minutes }}" min="0" max="30" step="0.5" required>
+  </label>
+  <button type="submit">Guardar espera</button>
+</form>
 
 <h2>Conversión automática</h2>
 <p class="hint settings-intro">

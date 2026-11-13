@@ -557,3 +557,41 @@ def test_library_marks_off_hours_recording(client, app):
         "SELECT id FROM recordings WHERE file_path = '/o/3.ts'"
     ).fetchone()["id"]
     assert "fuera de horario" not in client.get(f"/library?recording_id={night}").text
+
+
+def test_settings_reconnect_grace_saved_and_validated(client, app):
+    from db import settings_repo
+
+    conn = get_connection(app.state.db_path)
+    assert 'name="minutes" value="5"' in client.get("/settings").text
+
+    bad = client.post("/settings/reconnect-grace", data={"minutes": "45"})
+    assert "entre 0 y 30 minutos" in bad.text
+
+    client.post("/settings/reconnect-grace", data={"minutes": "2,5"})
+    assert settings_repo.get(conn, "reconnect_grace_seconds") == "150"
+
+
+def test_dashboard_shows_waiting_for_return(client, app, tmp_path):
+    import time as time_module
+
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    channels_repo.update(conn, channel_id, smart_interval=1)
+    raw = tmp_path / "live.ts"
+    raw.write_bytes(b"x")
+    recordings_repo.start(
+        conn, channel_id=channel_id, username="creator", file_path=str(raw)
+    )
+    status = {
+        "phase": "recording",
+        "detail": str(raw),
+        "flags": {"waiting_return_until": time_module.time() + 200},
+    }
+    app.state.supervisor.get_status = lambda cid: status
+
+    text = client.get("/partials/channels").text
+
+    assert "esperando que vuelva" in text
+    # The smart-interval hint means nothing while recording: hidden.
+    assert "aprendiendo horarios" not in text and "ahora cada" not in text

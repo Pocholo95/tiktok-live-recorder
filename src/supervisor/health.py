@@ -91,6 +91,12 @@ class HealthMonitor:
 
     def _check_growth(self, conn, channel_id, user, status, now):
         path = status.get("detail")
+        if (status.get("flags") or {}).get("waiting_return_until"):
+            # The live ended and the recorder is waiting for the creator to
+            # come back: the file is *supposed* not to grow right now.
+            self._growth.pop(channel_id, None)
+            self._status.set_flag(channel_id, "stalled_since", None)
+            return
         try:
             size = self._size_of(path) if path else None
         except OSError:

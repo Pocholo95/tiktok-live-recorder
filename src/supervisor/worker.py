@@ -15,6 +15,21 @@ from utils.utils import read_cookies
 
 PROFILE_REFRESH_SECONDS = 6 * 3600
 
+RECONNECT_GRACE_KEY = "reconnect_grace_seconds"
+RECONNECT_GRACE_DEFAULT = 300
+RECONNECT_GRACE_MAX = 1800
+
+
+def reconnect_grace_seconds(conn):
+    """How long to keep a recording open after the live ends (Settings)."""
+    try:
+        value = int(
+            settings_repo.get(conn, RECONNECT_GRACE_KEY, RECONNECT_GRACE_DEFAULT)
+        )
+    except (TypeError, ValueError):
+        value = RECONNECT_GRACE_DEFAULT
+    return max(0, min(RECONNECT_GRACE_MAX, value))
+
 
 class Worker:
     """
@@ -50,6 +65,7 @@ class Worker:
             on_status=self._on_status,
             participants_interval=self._participants_interval,
             automatic_interval_getter=self._automatic_interval,
+            reconnect_grace_getter=self._reconnect_grace,
         )
         self._recorder = TikTokRecorder(config)
         self._thread = threading.Thread(
@@ -95,6 +111,18 @@ class Worker:
 
         if phase == "offline":
             self._status_store.set(self.channel_id, phase="offline")
+            return
+
+        if phase == "waiting_return":
+            # Live looked over; the recorder keeps the file open for a while
+            # in case the creator comes back (dashboard + health monitor).
+            self._status_store.set_flag(
+                self.channel_id, "waiting_return_until", data.get("until")
+            )
+            return
+
+        if phase == "waiting_return_done":
+            self._status_store.set_flag(self.channel_id, "waiting_return_until", None)
             return
 
         if phase == "profile":
@@ -163,6 +191,13 @@ class Worker:
             # usual hours, slower otherwise - never stops checking.
             minutes, _reason = schedules.effective_interval(conn, row)
             return minutes
+        finally:
+            conn.close()
+
+    def _reconnect_grace(self):
+        conn = self._get_connection(self._db_path)
+        try:
+            return reconnect_grace_seconds(conn)
         finally:
             conn.close()
 

@@ -70,12 +70,17 @@ def _live_info(db, channel_id, status):
         for p in participants_repo.list_for_recording(db, recording["id"])
         if p["end_seconds"] is None
     ]
-    stalled_since = (status.get("flags") or {}).get("stalled_since")
+    flags = status.get("flags") or {}
+    stalled_since = flags.get("stalled_since")
+    waiting_until = flags.get("waiting_return_until")
     return {
         "recording_id": recording["id"],
         "elapsed_seconds": elapsed,
         "size_bytes": size,
         "guests": list(dict.fromkeys(guests)),
+        "waiting_seconds": max(0, int(waiting_until - time.time()))
+        if waiting_until
+        else None,
         "stalled_minutes": int((time.time() - stalled_since) / 60)
         if stalled_since is not None
         else None,
@@ -618,6 +623,9 @@ def _discord_context(request):
         url = settings_repo.get(conn, discord_webhook.SETTING_KEY)
         poll = settings_repo.get(conn, participants.SETTING_KEY)
         problem_alerts = alerts.enabled(conn)
+        from supervisor.worker import reconnect_grace_seconds
+
+        grace_seconds = reconnect_grace_seconds(conn)
         session_problem = alerts.last_session_problem(conn)
     finally:
         conn.close()
@@ -630,6 +638,7 @@ def _discord_context(request):
         "convert_defaults": convert.DEFAULTS,
         "discord_status": _mask(url) if url else None,
         "problem_alerts": problem_alerts,
+        "grace_minutes": round(grace_seconds / 60, 1),
         "session_problem": (
             {
                 "when": time.strftime(
@@ -670,6 +679,29 @@ def update_participants_interval(
         )
     settings_repo.set(db, participants.SETTING_KEY, str(value))
     return RedirectResponse(url="/settings?saved=participants", status_code=303)
+
+
+@router.post("/settings/reconnect-grace", response_class=HTMLResponse)
+def update_reconnect_grace(
+    request: Request,
+    minutes: str = Form(""),
+    db=Depends(get_db),
+    templates=Depends(get_templates),
+):
+    from supervisor.worker import RECONNECT_GRACE_KEY, RECONNECT_GRACE_MAX
+
+    try:
+        seconds = round(float(minutes.replace(",", ".")) * 60)
+    except ValueError:
+        seconds = -1
+    if not 0 <= seconds <= RECONNECT_GRACE_MAX:
+        return _settings_error(
+            request,
+            templates,
+            f"La espera tiene que ser entre 0 y {RECONNECT_GRACE_MAX // 60} minutos.",
+        )
+    settings_repo.set(db, RECONNECT_GRACE_KEY, str(seconds))
+    return RedirectResponse(url="/settings?saved=reconnect-grace", status_code=303)
 
 
 @router.post("/settings/problem-alerts", response_class=HTMLResponse)

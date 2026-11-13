@@ -163,6 +163,11 @@ class ParticipantTracker:
     def start(self):
         self._thread.start()
 
+    def set_room(self, room_id):
+        """The creator restarted their live (new room id) within the grace
+        window: keep tracking guests on the new room, same recording."""
+        self._room_id = room_id
+
     def stop(self):
         self._stop.set()
         if self._thread.ident is not None:  # only if start() actually ran

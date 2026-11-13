@@ -909,3 +909,5 @@ kbd {
 }
 .hm-cell.is-usual { outline: 1px solid rgba(79, 140, 255, 0.9); outline-offset: -1px; }
 .recording-off-hours { background: rgba(139, 145, 160, 0.18); color: var(--muted); }
+
+.live-info-waiting { color: var(--warn); }

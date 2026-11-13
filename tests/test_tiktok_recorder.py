@@ -256,6 +256,9 @@ class _FakeTracker:
     def start(self):
         self.started = True
 
+    def set_room(self, room_id):
+        self.room_id = room_id
+
     def stop(self):
         self.stopped = True
         self.on_change([{"username": "guest", "start_seconds": 1, "end_seconds": 2}])
@@ -334,3 +337,144 @@ def test_automatic_interval_is_read_live_from_getter():
     assert recorder.automatic_interval == 15
     current[0] = None  # channel row gone / unreadable -> keep last config
     assert recorder.automatic_interval == 5
+
+
+class _RestartingAPI:
+    """
+    The creator streams in room "1", ends, and after `comes_back_after`
+    seconds restarts in a NEW room "2"; then ends for good.
+    """
+
+    def __init__(self, clock, comes_back_after):
+        self.clock = clock
+        self.ended_at = None
+        self.comes_back_after = comes_back_after
+        self.room2_checks = 0
+        self.downloads = []
+
+    def is_room_alive(self, room_id):
+        if room_id == "1":
+            if self.ended_at is None and self.downloads:
+                self.ended_at = self.clock[0]  # first recheck after the stream
+            return not self.downloads
+        # room 2: alive when found (the recorder then downloads straight away),
+        # over for good at the next check
+        self.room2_checks += 1
+        return self.room2_checks <= 1
+
+    def get_room_id_from_user(self, user):
+        back = (
+            self.ended_at is not None
+            and self.clock[0] - self.ended_at >= self.comes_back_after
+        )
+        return "2" if back else None
+
+    def get_live_url_candidates(self, room_id, user=None):
+        return [f"https://example.invalid/{room_id}.flv"]
+
+    def download_live_stream(self, live_url):
+        self.downloads.append(live_url)
+        yield b"x" * 5000
+
+
+def _grace_recorder(tmp_path, monkeypatch, clock, grace, events):
+    import core.tiktok_recorder as rec_module
+
+    monkeypatch.setattr(rec_module.time, "time", lambda: clock[0])
+    recorder = TikTokRecorder(
+        RecorderConfig(
+            mode=Mode.MANUAL,
+            user="creator",
+            room_id="1",
+            cookies={},
+            output=str(tmp_path),
+            on_status=lambda phase, **data: events.append(phase),
+            reconnect_grace_getter=lambda: grace,
+        )
+    )
+
+    def fake_wait(seconds):
+        clock[0] += seconds
+
+    recorder._wait = fake_wait
+    return recorder
+
+
+def test_creator_restarting_within_grace_continues_same_recording(
+    tmp_path, monkeypatch
+):
+    _FakeRemuxer.instances.clear()
+    monkeypatch.setattr("core.tiktok_recorder.TsRemuxer", _FakeRemuxer)
+    monkeypatch.setattr("core.tiktok_recorder.ParticipantTracker", _FakeTracker)
+    clock = [1000.0]
+    events = []
+    recorder = _grace_recorder(tmp_path, monkeypatch, clock, grace=300, events=events)
+    api = _RestartingAPI(clock, comes_back_after=90)
+    recorder.tiktok = api
+
+    recorder.start_recording("creator", "1")
+
+    assert api.downloads == [
+        "https://example.invalid/1.flv",
+        "https://example.invalid/2.flv",  # new room, same recording
+    ]
+    assert events.count("recording_started") == 1
+    assert events.count("recording_finished") == 1
+    remuxer = _FakeRemuxer.instances[-1]
+    assert remuxer.connections == 2 and len(remuxer.chunks) == 2
+    assert "waiting_return" in events and "waiting_return_done" in events
+    assert _FakeTracker.instances[-1].room_id == "2"  # guests follow the new room
+
+
+def test_creator_not_back_within_grace_finishes_recording(tmp_path, monkeypatch):
+    _FakeRemuxer.instances.clear()
+    monkeypatch.setattr("core.tiktok_recorder.TsRemuxer", _FakeRemuxer)
+    monkeypatch.setattr("core.tiktok_recorder.ParticipantTracker", _FakeTracker)
+    clock = [1000.0]
+    events = []
+    recorder = _grace_recorder(tmp_path, monkeypatch, clock, grace=120, events=events)
+    api = _RestartingAPI(clock, comes_back_after=600)  # too late
+    recorder.tiktok = api
+
+    recorder.start_recording("creator", "1")
+
+    assert api.downloads == ["https://example.invalid/1.flv"]
+    assert events[-1] == "recording_finished"
+    assert 120 <= clock[0] - 1000 <= 140  # waited the grace, not more
+
+
+def test_no_grace_finishes_immediately(tmp_path, monkeypatch):
+    monkeypatch.setattr("core.tiktok_recorder.TsRemuxer", _FakeRemuxer)
+    clock = [1000.0]
+    events = []
+    recorder = _grace_recorder(tmp_path, monkeypatch, clock, grace=0, events=events)
+    api = _RestartingAPI(clock, comes_back_after=0)
+    recorder.tiktok = api
+
+    recorder.start_recording("creator", "1")
+
+    assert api.downloads == ["https://example.invalid/1.flv"]
+    assert "waiting_return" not in events
+    assert clock[0] == 1000.0
+
+
+def test_checks_every_minute_for_a_while_after_a_live(monkeypatch):
+    import core.tiktok_recorder as rec_module
+
+    now = [5000.0]
+    monkeypatch.setattr(rec_module.time, "time", lambda: now[0])
+    recorder = TikTokRecorder(
+        RecorderConfig(
+            mode=Mode.AUTOMATIC,
+            user="creator",
+            cookies={},
+            automatic_interval=5,
+            automatic_interval_getter=lambda: 10,  # e.g. smart "unusual"
+        )
+    )
+    assert recorder.automatic_interval == 10
+    recorder._last_live_end = now[0]
+    now[0] += 14 * 60
+    assert recorder.automatic_interval == 1
+    now[0] += 2 * 60
+    assert recorder.automatic_interval == 10

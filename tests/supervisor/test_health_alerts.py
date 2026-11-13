@@ -179,3 +179,50 @@ def test_worker_session_problem_alerts(tmp_path, monkeypatch):
 
     worker._on_status("session_problem", user="creator", has_session=False)
     assert sent[-1] == "⚠️ Live de @creator con restricción de edad"
+
+
+def test_waiting_for_return_is_not_a_stall(tmp_path, monkeypatch):
+    sent = _capture(monkeypatch)
+    db_path, conn = _db(tmp_path)
+    cid = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    store = ChannelStatusStore()
+    store.set(cid, phase="recording", detail="/out/a.ts")
+    now = [0.0]
+    monitor = _monitor(db_path, store, now, {"/out/a.ts": 100})
+
+    monitor.check_once()
+    store.set_flag(cid, "waiting_return_until", 9999)
+    now[0] = 20 * 60  # file unchanged for 20 min, but we're waiting on purpose
+    monitor.check_once()
+
+    assert sent == []
+    assert "stalled_since" not in store.get(cid)["flags"]
+
+
+def test_worker_marks_waiting_for_return(tmp_path, monkeypatch):
+    import supervisor.worker as worker_module
+
+    monkeypatch.setattr(worker_module, "read_cookies", lambda: {})
+    db_path, conn = _db(tmp_path)
+    row = channels_repo.get(
+        conn, channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    )
+    store = ChannelStatusStore()
+    worker = worker_module.Worker(row, db_path, get_connection, tmp_path, store)
+    store.set(row["id"], phase="recording", detail="/out/a.ts")
+
+    worker._on_status("waiting_return", user="creator", until=1234.0)
+    assert store.get(row["id"])["flags"]["waiting_return_until"] == 1234.0
+    worker._on_status("waiting_return_done", user="creator")
+    assert "waiting_return_until" not in store.get(row["id"])["flags"]
+
+
+def test_reconnect_grace_setting_defaults_and_bounds(tmp_path):
+    import supervisor.worker as worker_module
+
+    _, conn = _db(tmp_path)
+    assert worker_module.reconnect_grace_seconds(conn) == 300
+    settings_repo.set(conn, worker_module.RECONNECT_GRACE_KEY, "99999")
+    assert worker_module.reconnect_grace_seconds(conn) == 1800
+    settings_repo.set(conn, worker_module.RECONNECT_GRACE_KEY, "junk")
+    assert worker_module.reconnect_grace_seconds(conn) == 300

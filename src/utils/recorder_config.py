@@ -28,3 +28,7 @@ class RecorderConfig:
     participants_interval: Callable[[], int] | None = None
     # Hub only: returns the channel's current check interval (minutes).
     automatic_interval_getter: Callable[[], int] | None = None
+    # Hub only: seconds to keep a recording open after the live ends, in case
+    # the creator comes back (restarted live, or TikTok briefly reporting it
+    # as not alive). 0 = close immediately (plain CLI behaviour).
+    reconnect_grace_getter: Callable[[], int] | None = None

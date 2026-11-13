@@ -14,7 +14,7 @@
         hx-swap="outerHTML">
       <span class="muted">min</span>
     </label>
-    {% if channel.interval_now %}
+    {% if channel.interval_now and channel.phase != "recording" %}
     {% set i = channel.interval_now %}
     <div class="smart-now smart-{{ i.reason }}">
       {% if i.reason == "learning" %}
@@ -36,6 +36,7 @@
         {% if channel.live.size_bytes %}<span>· {{ channel.live.size_bytes | filesize }}</span>{% endif %}
       </a>
       {% if channel.live.guests %}<span class="live-info-guests">con @{{ channel.live.guests | join(", @") }}</span>{% endif %}
+      {% if channel.live.waiting_seconds is not none %}<span class="live-info-waiting">⏳ cortó el live · esperando que vuelva ({{ (channel.live.waiting_seconds // 60) }}:{{ "%02d" | format(channel.live.waiting_seconds % 60) }})</span>{% endif %}
       {% if channel.live.stalled_minutes is not none %}<span class="live-info-stalled">⚠ sin datos nuevos hace {{ channel.live.stalled_minutes }} min</span>{% endif %}
     </div>
     {% elif channel.detail and channel.phase != "recording" %}<br><small>{{ channel.detail }}</small>{% endif %}

@@ -14,8 +14,8 @@
   <span class="avatar avatar-{{ size }}" style="--hue: {{ username | hue }}" aria-hidden="true">{{ username[:1] | upper }}<img src="/avatars/{{ username | urlencode }}" alt="" loading="lazy" onerror="this.remove()"></span>
 {%- endmacro %}
 
-{% macro stat_tiles(totals, disk) -%}
-<div class="stats">
+{% macro stat_tiles(totals, disk, compact=False) -%}
+<div class="stats{% if compact %} stats-compact{% endif %}">
   <div class="stat">
     <span class="stat-value">{{ totals.total }}</span>
     <span class="stat-label">lives grabados</span>

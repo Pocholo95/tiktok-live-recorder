@@ -978,3 +978,69 @@ button.guest-range:hover { color: var(--text); border-color: var(--accent); opac
 .manual-convert > summary { cursor: pointer; padding: 0.4rem 0; }
 .manual-convert[open] > summary { margin-bottom: 0.6rem; }
 .manual-convert .steps { color: var(--text); }
+
+/* ---- Library: video-first, full width ------------------------------ */
+
+.container.container-wide { max-width: none; padding: 1rem 1.5rem 2rem; }
+.container-wide .lib-head { margin-bottom: 0.75rem; }
+
+.stats.stats-compact { gap: 0.5rem; margin-bottom: 0.75rem; }
+.stats-compact .stat { flex-direction: row; align-items: baseline; gap: 0.5rem; padding: 0.45rem 0.8rem; }
+.stats-compact .stat-value { font-size: 1.05rem; }
+.stats-compact .meter { flex: 1; align-self: center; margin-top: 0; min-width: 40px; }
+
+.convert-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.6rem;
+  padding: 0.55rem 0.8rem;
+  margin-bottom: 0.9rem;
+}
+.convert-bar-title { font-size: 0.95rem; margin-right: 0.3rem; }
+.convert-bar select { flex: 0 1 auto; padding: 0.3rem 0.5rem; font-size: 0.82rem; }
+.convert-bar-cmd { flex-basis: 100%; font-size: 0.82rem; color: var(--muted); }
+.convert-bar-cmd:not([open]) { flex-basis: auto; }
+.convert-bar-cmd summary { cursor: pointer; }
+.convert-bar-cmd[open] .code-block { margin-top: 0.4rem; }
+
+.container-wide .library-layout { grid-template-columns: 300px minmax(0, 1fr); gap: 1rem; }
+.container-wide .library-sidebar { top: 0.75rem; }
+.container-wide .rec-list { max-height: calc(100vh - 12rem); }
+
+.rec-body { display: flex; flex-direction: column; gap: 1rem; }
+.rec-media { min-width: 0; }
+.rec-side { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+
+.rec-media .clip-video { max-height: calc(100vh - 11rem); min-height: 320px; }
+
+@media (min-width: 1250px) {
+  /* Wide screens: the (portrait) video takes the free height, details on
+     its right; the video stays in view while the side column scrolls. */
+  .rec-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 440px);
+    align-items: start;
+  }
+  .rec-media { position: sticky; top: 0.75rem; }
+}
+
+.lib-head { align-items: center; }
+.lib-head .stats-compact {
+  display: flex;
+  flex: 1 1 520px;
+  flex-wrap: wrap;
+  margin: 0;
+}
+.lib-head .stats-compact .stat { flex: 1 1 140px; }
+
+.stats-compact .stat-value { white-space: nowrap; }
+.stats-compact .stat-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 900px) {
+  .container-wide .library-layout { grid-template-columns: 1fr; }
+  .container-wide .library-sidebar { position: static; }
+  .container-wide .rec-list { max-height: 45vh; }
+  /* Video first on phones too; the list comes after it. */
+  .container-wide .library-main { order: -1; }
+}

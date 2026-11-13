@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Biblioteca - TikTok Live Recorder Hub{% endblock %}
+{% block container_class %} container-wide{% endblock %}
 {% block content %}
 <link rel="stylesheet" href="/static/nouislider.min.css">
 <script src="/static/nouislider.min.js"></script>
@@ -54,15 +55,43 @@ document.addEventListener("click", (e) => {
   document.addEventListener("click", (e) => {
     const button = e.target.closest("[data-copy-cmd]");
     if (!button) return;
-    const code = button.parentElement.querySelector("[data-convert-cmd]");
+    const scope = button.closest("[data-convert-scope]") || button.parentElement;
+    const code = scope.querySelector("[data-convert-cmd]");
+    const label = button.dataset.label || button.textContent;
+    button.dataset.label = label;
     navigator.clipboard.writeText(code.textContent).then(() => {
       button.textContent = "¡Copiado!";
-      setTimeout(() => { button.textContent = "Copiar"; }, 1500);
+      setTimeout(() => { button.textContent = label; }, 1500);
     });
   });
   document.addEventListener("DOMContentLoaded", render);
   document.addEventListener("htmx:afterSettle", render);
   render();
+})();
+
+// Video first: size the player to the space left below it, so the whole
+// video (and its "En pantalla" bar) fits without scrolling.
+(function () {
+  function fit() {
+    const video = document.getElementById("clip-video");
+    if (!video) return;
+    const top = video.getBoundingClientRect().top + window.scrollY;
+    const bar = document.getElementById("on-screen");
+    const below = (bar ? bar.offsetHeight : 0) + 16;
+    const room = window.innerHeight - Math.max(0, top - window.scrollY) - below;
+    video.style.maxHeight = Math.max(320, Math.round(room)) + "px";
+  }
+  window.addEventListener("resize", fit);
+  document.addEventListener("htmx:afterSettle", (e) => {
+    fit();
+    // On phones the list sits below the video: bring the chosen one into view.
+    const main = document.getElementById("library-main");
+    if (window.innerWidth <= 900 && main && e.target && e.target.id === "library-main") {
+      main.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  });
+  document.addEventListener("DOMContentLoaded", fit);
+  fit();
 })();
 
 // "▶ Ir" next to each guest: jump the player to when they joined.

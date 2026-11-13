@@ -637,3 +637,22 @@ def test_dashboard_delete_is_a_danger_button(client, app):
     text = client.get("/partials/channels").text
     assert 'class="button-danger row-delete"' in text
     assert 'data-label="Estado"' in text
+
+
+def test_library_is_video_first_and_full_width(client, app):
+    from db import participants_repo
+
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    rid = _completed(conn, channel_id, "/output/v.mp4", "mp4")
+    participants_repo.replace_for_recording(
+        conn, rid, [{"username": "guest", "start_seconds": 1, "end_seconds": 5}]
+    )
+
+    text = client.get(f"/library?recording_id={rid}").text
+
+    assert 'class="container container-wide"' in text
+    # Video column first, guests/clip tools in the side column after it.
+    assert text.index('class="rec-media"') < text.index('class="rec-side"')
+    assert text.index('id="clip-video"') < text.index("Con quién estuvo")
+    assert text.count("Con quién estuvo") == 1

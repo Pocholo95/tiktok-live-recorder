@@ -15,7 +15,7 @@
     <a href="/creators" class="{{ 'active' if path.startswith('/creators') }}">Creadores</a>
     <a href="/settings" class="{{ 'active' if path.startswith('/settings') }}">Ajustes</a>
   </nav>
-  <main class="container">
+  <main class="container{% block container_class %}{% endblock %}">
     {% block content %}{% endblock %}
   </main>
 <script>

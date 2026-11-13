@@ -101,6 +101,15 @@ copies of the `*.example` files.
 ## Web hub
 
 - FastAPI + Jinja2 + htmx, no build step. Routers in `src/web/routers/`.
+- Library layout is video-first (user request 2026-11-13): full width
+  (`container-wide` block in base.html), title + compact stats + tabs in
+  one row, a one-line convert bar, and for MP4s a two-column `.rec-body`
+  (video `.rec-media`, sticky; guests/clip tools/marks in `.rec-side`)
+  from 1250 px, stacked below. A script in library.html sizes the video to
+  the room left below it (`fit`) so it and the "En pantalla" bar fit
+  without scrolling. On phones the player comes before the list.
+  `partials/guests_panel.html` is shared by the player side column and
+  the raw/recording views.
 - Library: `/library` renders `library.html`, `partials/library_content.html`
   (htmx filter/tab changes) or `partials/library_main.html` (htmx
   recording click, `HX-Target: library-main`) so the sidebar keeps its

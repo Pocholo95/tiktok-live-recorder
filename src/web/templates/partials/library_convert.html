@@ -1,6 +1,6 @@
 {% set raw_name = r.file_path | basename %}
 <section class="workflow" id="convert-workflow" data-recording-id="{{ r.id }}" data-raw-name="{{ raw_name }}">
-  <div class="panel convert-one">
+  <div class="panel convert-one" data-convert-scope>
     <h3>Convertir y subir esta grabación</h3>
     <p class="muted">
       <span class="mono">{{ raw_name }}</span>{% if r.file_size_bytes %} · {{ r.file_size_bytes | filesize }}{% endif %}.

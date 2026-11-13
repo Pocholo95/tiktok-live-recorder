@@ -1,3 +1,5 @@
+<div class="rec-body">
+  <div class="rec-media">
 <section class="panel player-panel">
   <video id="clip-video" controls preload="metadata" class="clip-video" poster="/media/{{ selected_recording.id }}/thumbnail">
     <source src="/media/{{ selected_recording.id }}" type="video/mp4">
@@ -11,7 +13,9 @@
   </div>
   {% endif %}
 </section>
-
+  </div>
+  <div class="rec-side">
+    {% if participants %}{% include "partials/guests_panel.html" %}{% endif %}
 <section class="panel">
   <div class="panel-head">
     <h3>Cortar un clip</h3>
@@ -59,6 +63,8 @@
     {% include "partials/clip_marks.html" %}
   </div>
 </section>
+  </div>
+</div>
 
 <script>
 (function () {

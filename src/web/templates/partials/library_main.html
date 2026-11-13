@@ -20,35 +20,9 @@
     </div>
   </header>
 
-  {% if participants %}
-  <section class="panel guests-panel">
-    <div class="panel-head">
-      <h3>Con quién estuvo</h3>
-      <span class="muted">{{ guest_groups | length }} persona{{ "s" if guest_groups | length != 1 else "" }}</span>
-    </div>
-    <ul class="guests">
-      {% for g in guest_groups %}
-      <li class="guest" data-guest data-ranges='{{ g.ranges | tojson }}'>
-        {{ avatar(g.username, "xs") }}
-        <a class="creator-link" href="https://www.tiktok.com/@{{ g.username }}" target="_blank" rel="noopener">@{{ g.username }}</a>
-        <span class="guest-ranges">
-          {% for range in g.ranges %}
-          {% if r.format == "mp4" and r.status == "completed" %}
-          <button type="button" class="guest-range mono" data-seek="{{ range.start }}" title="Ir a este momento">▶ {{ range.start | hhmmss }} → {{ (range.end | hhmmss) if range.end is not none else "final" }}</button>
-          {% else %}
-          <span class="guest-range mono">{{ range.start | hhmmss }} → {{ (range.end | hhmmss) if range.end is not none else ("en curso" if r.status == "recording" else "final") }}</span>
-          {% endif %}
-          {% endfor %}
-        </span>
-      </li>
-      {% endfor %}
-    </ul>
-    <p class="hint guests-debug">
-      ¿Algo raro en la lista?
-      <a href="/recordings/{{ r.id }}/participants-debug">Descargá los datos crudos de TikTok</a>
-      y pasámelos.
-    </p>
-  </section>
+{% set shows_player = r.status not in ("recording", "failed") and r.format == "mp4" %}
+  {% if participants and not shows_player %}
+  {% include "partials/guests_panel.html" %}
   {% endif %}
 
   {% if r.status == "recording" %}

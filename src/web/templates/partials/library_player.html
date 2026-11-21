@@ -1,9 +1,13 @@
 <div class="rec-body">
   <div class="rec-media">
 <section class="panel player-panel">
-  <video id="clip-video" controls preload="metadata" class="clip-video" poster="/media/{{ selected_recording.id }}/thumbnail">
-    <source src="/media/{{ selected_recording.id }}" type="video/mp4">
-  </video>
+  <div class="player" id="player"
+    data-recording-id="{{ selected_recording.id }}"
+    data-guests='{{ participants | tojson }}'>
+    <video id="clip-video" controls preload="metadata" playsinline class="clip-video" poster="/media/{{ selected_recording.id }}/thumbnail">
+      <source src="/media/{{ selected_recording.id }}" type="video/mp4">
+    </video>
+  </div>
   {% if participants %}
   <div class="on-screen" id="on-screen"
     data-creator="{{ selected_recording.username }}"
@@ -67,6 +71,8 @@
 </div>
 
 <script>
+if (window.initPlayer) window.initPlayer(document.getElementById("player"));
+
 (function () {
   // "En pantalla": who was linked in with the creator at the current
   // playback time. Names come from recording_participants (seconds since
@@ -180,6 +186,10 @@
     slider.on("update", (values) => {
       startInput.value = formatHMS(parseFloat(values[0]));
       endInput.value = formatHMS(parseFloat(values[1]));
+      // Show the clip being cut on the player's seek bar.
+      if (window.playerSetSelection) {
+        window.playerSetSelection(parseFloat(values[0]), parseFloat(values[1]));
+      }
     });
   }
 

@@ -117,6 +117,28 @@ copies of the `*.example` files.
   `pagehide`. Server side was fine (Range 206, ~110 MB/s, faststart, GOP
   2 s, h2 at the proxy); seeking in a 2.6 h MP4 still takes ~1-1.5 s in
   the browser.
+- Custom player controls (user chose own controls over Plyr, 2026-11-20):
+  `static/player.js` `initPlayer(#player)`, called from
+  library_player.html on every render (tears down the previous instance;
+  native `controls` stay in the HTML as the no-JS fallback). Seek bar with
+  buffered range, saved clips (`.mark[data-start/end]`, redrawn on
+  `htmx:afterSettle`), the clip being cut (`window.playerSetSelection`,
+  fed by the noUiSlider) and a guest lane; hover/drag shows a storyboard
+  thumbnail + time + who was on screen, and dragging seeks only on
+  release. -10/-1/+1/+10, frame steps (1/30 s), speed, volume (speed and
+  volume in localStorage `player-prefs`), fullscreen on the wrapper.
+  Keys: space/K, J/L ±10, ←/→ ±5 (Shift ±1), `,`/`.` frames, 0-9 %, M,
+  F; I/O stay the clip editor's. Self-recovery: stuck loading 8 s while
+  playing or a source error → `load()` and resume at the same time and
+  play state, backoff, after 6 tries a "tocá para reintentar" notice.
+- Storyboards (seek-bar thumbnails): `supervisor/storyboards.py`,
+  `<video>.storyboard/` next to the MP4 (`sheet_NNN.jpg` 10x10 grids,
+  tiles 160 px high, one every `max(2, ceil(duration/1000))` s, plus
+  `meta.json`). `StoryboardWorker` thread (serve.py, `app.state.storyboards`)
+  builds missing ones newest first, keyframes only, `nice`, rescans every
+  10 min and is woken after an upload. Served by `/media/{id}/storyboard`
+  (JSON, 404 until built) and `/media/{id}/storyboard/{n}.jpg`; deleted
+  with the recording.
 - Library: `/library` renders `library.html`, `partials/library_content.html`
   (htmx filter/tab changes) or `partials/library_main.html` (htmx
   recording click, `HX-Target: library-main`) so the sidebar keeps its

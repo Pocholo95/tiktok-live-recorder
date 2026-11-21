@@ -1,6 +1,6 @@
 {% if error %}<p class="error-banner">{{ error }}</p>{% endif %}
 {% for mark in marks %}
-<div class="mark" id="clip-mark-{{ mark.id }}">
+<div class="mark" id="clip-mark-{{ mark.id }}" data-start="{{ mark.start_seconds }}" data-end="{{ mark.end_seconds }}" data-label="{{ mark.label or '' }}">
   <div class="mark-info">
     <strong>{{ mark.label or "Sin nombre" }}</strong>
     <span class="mono muted">{{ mark.start_seconds | hhmmss }} → {{ mark.end_seconds | hhmmss }}</span>

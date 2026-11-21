@@ -4,6 +4,7 @@
 {% block content %}
 <link rel="stylesheet" href="/static/nouislider.min.css">
 <script src="/static/nouislider.min.js"></script>
+<script src="/static/player.js"></script>
 
 {% include "partials/library_content.html" %}
 
@@ -77,7 +78,8 @@ document.addEventListener("click", (e) => {
     if (!video) return;
     const top = video.getBoundingClientRect().top + window.scrollY;
     const bar = document.getElementById("on-screen");
-    const below = (bar ? bar.offsetHeight : 0) + 16;
+    const controls = document.getElementById("player-controls");
+    const below = (bar ? bar.offsetHeight : 0) + (controls ? controls.offsetHeight : 0) + 16;
     const room = window.innerHeight - Math.max(0, top - window.scrollY) - below;
     video.style.maxHeight = Math.max(320, Math.round(room)) + "px";
   }

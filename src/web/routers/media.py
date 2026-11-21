@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 
 from db import profiles_repo, recordings_repo
 from db.database import get_connection
+from supervisor import storyboards
 from supervisor.thumbnails import generate_thumbnail
 from utils.logger_manager import logger
 from web.deps import get_db
@@ -118,6 +119,33 @@ def download_clip(recording_id: int, start: float, end: float, db=Depends(get_db
         stream(),
         media_type="video/mp4",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/media/{recording_id}/storyboard")
+def get_storyboard(recording_id: int, db=Depends(get_db)):
+    """Seek-bar preview grid (see supervisor/storyboards.py); 404 until built."""
+    recording = recordings_repo.get(db, recording_id)
+    meta = storyboards.load_meta(recording["file_path"]) if recording else None
+    if meta is None:
+        return JSONResponse(
+            {"detail": "No storyboard yet"},
+            status_code=404,
+            headers={"Cache-Control": "no-store"},
+        )
+    return JSONResponse(meta, headers={"Cache-Control": "no-store"})
+
+
+@router.get("/media/{recording_id}/storyboard/{sheet}.jpg")
+def get_storyboard_sheet(recording_id: int, sheet: int, db=Depends(get_db)):
+    recording = recordings_repo.get(db, recording_id)
+    if recording is None or not 1 <= sheet <= 999:
+        raise HTTPException(status_code=404, detail="Not found")
+    path = storyboards.storyboard_dir(recording["file_path"]) / f"sheet_{sheet:03d}.jpg"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(
+        path, media_type="image/jpeg", headers={"Cache-Control": "max-age=86400"}
     )
 
 
@@ -262,6 +290,11 @@ async def upload_converted(recording_id: int, request: Request):
     status_code, message = await run_in_threadpool(
         _finalize_upload, db_path, recording_id, part_path, final_path
     )
+    if status_code == 200:
+        storyboards.remove(final_path)  # a re-upload replaces the old one
+        worker = getattr(request.app.state, "storyboards", None)
+        if worker is not None:
+            worker.wake()
     return JSONResponse({"detail": message}, status_code=status_code)
 
 

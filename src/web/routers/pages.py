@@ -16,6 +16,7 @@ from db import (
     settings_repo,
 )
 from db.database import get_connection
+from supervisor import storyboards
 from web import convert as convert_presets
 from utils.enums import Mode
 from web.deps import get_db, get_supervisor, get_templates
@@ -462,6 +463,7 @@ def _delete_recording_files(db, recording):
         Path(recording["file_path"]).with_suffix(".participants.jsonl").unlink(
             missing_ok=True
         )
+        storyboards.remove(recording["file_path"])
     if recording["thumbnail_path"]:
         Path(recording["thumbnail_path"]).unlink(missing_ok=True)
     recordings_repo.delete(db, recording["id"])

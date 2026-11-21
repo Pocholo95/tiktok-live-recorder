@@ -47,7 +47,14 @@ def main():
 
     HealthMonitor(db_path, get_connection, supervisor.status).start()
 
+    # Seek-bar preview thumbnails for converted MP4s (low priority).
+    from supervisor.storyboards import StoryboardWorker
+
+    storyboards = StoryboardWorker(db_path, get_connection, ffmpeg_path=ffmpeg_path)
+    storyboards.start()
+
     app = create_app(db_path, supervisor, output_dir)
+    app.state.storyboards = storyboards
 
     host = os.environ.get("HUB_HOST", "0.0.0.0")
     port = int(os.environ.get("HUB_PORT", "8000"))

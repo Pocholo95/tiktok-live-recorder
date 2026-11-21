@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -264,3 +265,31 @@ def test_participants_debug_download_and_cleanup(client, app, tmp_path):
     assert (
         client.get(f"/recordings/{recording_id}/participants-debug").status_code == 404
     )
+
+
+def test_storyboard_endpoints(client, app, tmp_path):
+    from supervisor import storyboards
+
+    video = tmp_path / "TK_sb.mp4"
+    video.write_bytes(b"x")
+    folder = storyboards.storyboard_dir(video)
+    folder.mkdir()
+    meta = {"interval": 2, "cols": 10, "rows": 10, "tile_width": 90,
+            "tile_height": 160, "count": 15, "sheets": 1}  # fmt: skip
+    (folder / "meta.json").write_text(json.dumps(meta))
+    (folder / "sheet_001.jpg").write_bytes(b"jpg")
+    conn = get_connection(app.state.db_path)
+    rid = recordings_repo.start(
+        conn, channel_id=None, username="c", file_path=str(video)
+    )
+    recordings_repo.mark_completed(conn, rid, file_path=str(video), format="mp4")
+
+    assert client.get(f"/media/{rid}/storyboard").json() == meta
+    sheet = client.get(f"/media/{rid}/storyboard/1.jpg")
+    assert sheet.status_code == 200 and sheet.content == b"jpg"
+    assert client.get(f"/media/{rid}/storyboard/2.jpg").status_code == 404
+    assert client.get("/media/999/storyboard").status_code == 404
+
+    # Deleting the recording removes its storyboard too.
+    client.delete(f"/recordings/{rid}")
+    assert not folder.exists()

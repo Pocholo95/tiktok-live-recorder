@@ -33,6 +33,12 @@
   </label>
   <button type="submit">Guardar cookies</button>
 </form>
+<p class="hint settings-intro">
+  Para entender por qué la sesión "vence" tan seguido, el hub anota qué cookies
+  renueva TikTok (solo los nombres) y cada vez que TikTok rechaza un live con la
+  sesión puesta, con el motivo que da.
+  <a href="/settings/session-log">Descargar el registro de la sesión</a>.
+</p>
 {% if session_status %}
 <p class="session-health {{ 'is-bad' if session_problem else 'is-ok' }}">
   {% if session_problem %}

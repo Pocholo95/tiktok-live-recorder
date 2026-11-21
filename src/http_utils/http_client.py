@@ -1,8 +1,18 @@
 import requests
 
 from utils.enums import StatusCode
+from utils import session_log
 from utils.logger_manager import logger
 from utils.utils import is_termux
+
+
+def _noting_cookies(request):
+    def wrapped(method, url, *args, **kwargs):
+        response = request(method, url, *args, **kwargs)
+        session_log.note_response(url, response)
+        return response
+
+    return wrapped
 
 
 class HttpClient:
@@ -51,6 +61,10 @@ class HttpClient:
         if self.cookies is not None:
             self.req.cookies.update(self.cookies)
             self.req_stream.cookies.update(self.cookies)
+
+        # Diagnostics: note which cookies TikTok sets (names only), to learn
+        # why the hub's session keeps "expiring" (utils/session_log.py).
+        self.req.request = _noting_cookies(self.req.request)
 
         self.check_proxy()
 

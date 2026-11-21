@@ -18,6 +18,7 @@ from utils.custom_exceptions import (
     UserLiveError,
 )
 from utils.enums import Error, Mode, TikTokError, TimeOut
+from utils import session_log
 from utils.logger_manager import logger
 from utils.recorder_config import RecorderConfig
 
@@ -43,6 +44,7 @@ class TikTokRecorder:
         self.use_telegram = config.use_telegram
         self._proxy = config.proxy
         self._cookies = config.cookies
+        self._cookies_getter = config.cookies_getter
         self._stop_event = config.stop_event
         self._on_status = config.on_status or (lambda *args, **kwargs: None)
         # Guest names are a hub feature (they're shown in the library); the
@@ -161,9 +163,36 @@ class TikTokRecorder:
 
         self.start_recording(self.user, self.room_id)
 
+    def _refresh_cookies(self):
+        """
+        Picks up cookies saved in Settings since the last check. Each channel
+        used to read cookies.json once, at start: a session renewed in
+        Settings never reached running channels, which kept being refused
+        with the old one until the hub restarted. Only called between
+        checks, never during a recording.
+        """
+        if self._cookies_getter is None:
+            return
+        try:
+            cookies = self._cookies_getter()
+        except Exception:
+            return
+        if cookies is None:
+            return
+        if cookies == (self._cookies or {}):
+            return
+        self._cookies = cookies
+        self.tiktok = TikTokAPI(proxy=None, cookies=cookies)
+        has_session = bool(cookies.get("sessionid_ss"))
+        logger.info(f"@{self.user}: cookies changed, using the new session")
+        session_log.note_event(
+            "cookies_reloaded", user=self.user, has_session=has_session
+        )
+
     def automatic_mode(self):
         while not self._stopped():
             try:
+                self._refresh_cookies()
                 self._on_status("checking", user=self.user)
                 self.room_id = self.tiktok.get_room_id_from_user(self.user)
                 self._report_profile()

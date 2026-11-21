@@ -31,6 +31,13 @@ def reconnect_grace_seconds(conn):
     return max(0, min(RECONNECT_GRACE_MAX, value))
 
 
+def _current_cookies():
+    try:
+        return read_cookies()
+    except Exception:
+        return None  # unreadable right now: keep using the ones loaded
+
+
 class Worker:
     """
     Runs one channel's recorder as a supervised, stoppable background
@@ -66,6 +73,7 @@ class Worker:
             participants_interval=self._participants_interval,
             automatic_interval_getter=self._automatic_interval,
             reconnect_grace_getter=self._reconnect_grace,
+            cookies_getter=_current_cookies,
         )
         self._recorder = TikTokRecorder(config)
         self._thread = threading.Thread(

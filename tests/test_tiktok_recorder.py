@@ -665,3 +665,39 @@ def test_blocked_live_is_reported_not_offline(monkeypatch):
     assert "offline" not in phases
     blocked = [data for phase, data in events if phase == "blocked"]
     assert blocked == [{"user": "creator", "reason": "restricted", "has_session": True}]
+
+
+def test_running_channel_picks_up_a_renewed_session(monkeypatch):
+    import core.tiktok_recorder as recorder_module
+
+    created = []
+
+    class _API:
+        def __init__(self, proxy, cookies):
+            self.cookies = cookies
+            created.append(cookies)
+
+    monkeypatch.setattr(recorder_module, "TikTokAPI", _API)
+    stored = [{"sessionid_ss": "old"}]
+    recorder = TikTokRecorder(
+        RecorderConfig(
+            mode=Mode.AUTOMATIC,
+            user="creator",
+            cookies={"sessionid_ss": "old"},
+            cookies_getter=lambda: stored[0],
+        )
+    )
+    first = recorder.tiktok
+
+    recorder._refresh_cookies()
+    assert recorder.tiktok is first  # unchanged: nothing rebuilt
+
+    stored[0] = {"sessionid_ss": "new"}
+    recorder._refresh_cookies()
+    assert recorder.tiktok is not first and recorder.tiktok.cookies == {
+        "sessionid_ss": "new"
+    }
+
+    stored[0] = None  # cookies.json unreadable for a moment: keep the current ones
+    recorder._refresh_cookies()
+    assert recorder.tiktok.cookies == {"sessionid_ss": "new"}

@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 from http_utils.http_client import HttpClient
 from utils.enums import StatusCode, TikTokError
+from utils import session_log
 from utils.logger_manager import logger
 from utils.custom_exceptions import (
     LiveBlockedError,
@@ -62,6 +63,7 @@ class TikTokAPI:
         self.TIKREC_API = "https://tikrec.com"
         self.last_user_info = {}
         self.last_room_status_code = None
+        self._has_session = bool((cookies or {}).get("sessionid_ss"))
         # Filled by get_live_urls: what each candidate URL is (quality,
         # resolution, bitrate, codec) and its backup-CDN twin.
         self.stream_info = {}
@@ -145,6 +147,14 @@ class TikTokAPI:
         # Kept so callers can tell "access denied" (4003110: age-restricted
         # live without a working session) from other failures.
         self.last_room_status_code = room_info.get("status_code", 0)
+        if self.last_room_status_code == 4003110:
+            session_log.note_refusal(
+                None,
+                room_id,
+                "room_info",
+                getattr(self, "_has_session", False),
+                room_info.get("data"),
+            )
         if self.last_room_status_code != 0:
             return None
         return room_info.get("data") or None
@@ -478,6 +488,13 @@ class TikTokAPI:
         status_code = data.get("status_code", 0)
 
         if status_code == 4003110:
+            session_log.note_refusal(
+                user,
+                room_id,
+                "live_urls",
+                getattr(self, "_has_session", False),
+                data.get("data"),
+            )
             if user:
                 logger.info(
                     "API blocked by WAF (4003110). Trying fallback: extract stream URL from live page..."

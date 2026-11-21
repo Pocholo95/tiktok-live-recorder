@@ -32,3 +32,6 @@ class RecorderConfig:
     # the creator comes back (restarted live, or TikTok briefly reporting it
     # as not alive). 0 = close immediately (plain CLI behaviour).
     reconnect_grace_getter: Callable[[], int] | None = None
+    # Hub only: returns the current cookies.json, read before every check so
+    # a session renewed in Settings reaches channels that are already running.
+    cookies_getter: Callable[[], dict] | None = None

@@ -323,9 +323,22 @@ copies of the `*.example` files.
   synced to playback). The user decided against burning names into the
   MP4: TikTok's layout changes made fixed positions land on the video or
   the black bars unpredictably, and per-panel placement isn't knowable.
-- The user's TikTok `sessionid_ss` expires almost daily (2026-11-21); they
-  renew it in Settings -> Cookies. Without a working one, age-restricted
-  lives record without guest names and their cids can't be looked up.
+- The user's TikTok `sessionid_ss` "expires" almost daily (2026-11-21;
+  a secondary account used only by the hub, copied with the Cookie-Editor
+  extension into Settings -> Cookies). Found the same day: each channel
+  read cookies.json ONCE at start, so a renewed session never reached
+  running channels until the hub restarted - now `TikTokRecorder.
+  _refresh_cookies` re-reads it (`cookies_getter`) before every check and
+  rebuilds its TikTokAPI when it changed (never mid-recording). To learn
+  the real cause, `utils/session_log.py` writes
+  `OUTPUT_DIR/session-events.jsonl` (download: Settings -> Cookies):
+  cookie NAMES TikTok sets (never values), every 4003110 (TikTok gives no
+  reason: `"prompts": ""`), `session_saved`, `cookies_reloaded`. Next
+  step, decided with the user: read that after a few days; if TikTok
+  rotates session cookies, persist them; if it still dies, a tiny browser
+  extension that pushes the account's tiktok.com cookies to the hub.
+  Logging in with user/password is a no-go (captcha, account risk).
+  Without a working session, restricted lives show "No se puede grabar".
 - `src/cookies.json` is marked `git update-index --skip-worktree` on the
   user's machine because it holds their TikTok session. Never commit it.
 - Live notices go to a Discord webhook: `notify/discord_webhook.py`. The

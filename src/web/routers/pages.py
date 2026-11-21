@@ -5,7 +5,12 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Body, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 
 from db import (
     channels_repo,
@@ -631,6 +636,17 @@ def _settings_error(request, templates, message):
     )
 
 
+@router.get("/settings/session-log")
+def download_session_log():
+    """What TikTok did with the session (utils/session_log.py)."""
+    from utils import session_log
+
+    path = session_log.log_path()
+    if path is None or not path.is_file():
+        raise HTTPException(status_code=404, detail="Todavía no hay registro")
+    return FileResponse(path, media_type="application/x-ndjson", filename=path.name)
+
+
 @router.post("/settings/cookies", response_class=HTMLResponse)
 def update_cookies(
     request: Request,
@@ -662,7 +678,9 @@ def update_cookies(
 
     if sessionid_ss.strip():
         from supervisor import alerts
+        from utils import session_log
 
+        session_log.note_event("session_saved")
         conn = get_connection(request.app.state.db_path)
         try:
             alerts.clear_session_problem(conn)

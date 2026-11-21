@@ -16,7 +16,8 @@ from db import (
     settings_repo,
 )
 from db.database import get_connection
-from supervisor import storyboards
+from core import stream_stats
+from supervisor import originals, storyboards
 from web import convert as convert_presets
 from utils.enums import Mode
 from web.deps import get_db, get_supervisor, get_templates
@@ -445,6 +446,8 @@ def library(
             "cleanup": cleanup,
             "state": state,
             "off_hours": _is_off_hours(db, selected_recording),
+            "original": _original_view(db, selected_recording),
+            "stream": _stream_view(selected_recording),
             "counts": counts,
             "convert_encoders": convert_presets.ENCODERS,
             "convert_sizes": convert_presets.SIZES,
@@ -458,13 +461,34 @@ def library(
     )
 
 
+def _original_view(db, recording):
+    """Kept raw file of a converted recording (supervisor/originals.py)."""
+    if recording is None or originals.available(recording) is None:
+        return None
+    expiry = originals.expires_at(recording, originals.keep_days(db))
+    return {
+        "size": originals.size_of(recording),
+        "until": expiry.strftime("%Y-%m-%d %H:%M:%S") if expiry else None,
+    }
+
+
+def _stream_view(recording):
+    """What the recorder saw arrive (core/stream_stats.py), for the header."""
+    if recording is None or not recording["file_path"]:
+        return None
+    return stream_stats.summary(stream_stats.load(recording["file_path"]))
+
+
 def _delete_recording_files(db, recording):
     if recording["file_path"]:
         Path(recording["file_path"]).unlink(missing_ok=True)
         Path(recording["file_path"]).with_suffix(".participants.jsonl").unlink(
             missing_ok=True
         )
+        stream_stats.stats_path(recording["file_path"]).unlink(missing_ok=True)
         storyboards.remove(recording["file_path"])
+    if recording["original_path"]:
+        Path(recording["original_path"]).unlink(missing_ok=True)
     if recording["thumbnail_path"]:
         Path(recording["thumbnail_path"]).unlink(missing_ok=True)
     recordings_repo.delete(db, recording["id"])
@@ -502,7 +526,7 @@ def delete_recordings_without_clips(
         if counts.get(recording_id, 0) or not _bulk_deletable(recording):
             kept += 1
             continue
-        freed += recording["file_size_bytes"] or 0
+        freed += (recording["file_size_bytes"] or 0) + originals.size_of(recording)
         _delete_recording_files(db, recording)
         deleted += 1
     return {"deleted": deleted, "kept": kept, "freed_bytes": freed}
@@ -699,9 +723,22 @@ def _discord_context(request):
 
         grace_seconds = reconnect_grace_seconds(conn)
         session_problem = alerts.last_session_problem(conn)
+        keep_days = originals.keep_days(conn)
+        originals_summary = originals.summary(conn)
     finally:
         conn.close()
+    from supervisor import backups
+
+    folder = backups.backup_dir(request.app.state.output_dir)
+    done = backups.existing(folder)
     return {
+        "keep_days": keep_days,
+        "keep_days_max": originals.KEEP_DAYS_MAX,
+        "originals": originals_summary,
+        "originals_min_free": originals.min_free_bytes(),
+        "backup_dir": str(folder),
+        "backup_keep": backups.KEEP,
+        "last_backup": done[-1].stem.removeprefix("hub-") if done else None,
         "discord_status": _mask(url) if url else None,
         "problem_alerts": problem_alerts,
         "grace_minutes": round(grace_seconds / 60, 1),
@@ -768,6 +805,27 @@ def update_reconnect_grace(
         )
     settings_repo.set(db, RECONNECT_GRACE_KEY, str(seconds))
     return RedirectResponse(url="/settings?saved=reconnect-grace", status_code=303)
+
+
+@router.post("/settings/keep-originals", response_class=HTMLResponse)
+def update_keep_originals(
+    request: Request,
+    days: str = Form(""),
+    db=Depends(get_db),
+    templates=Depends(get_templates),
+):
+    try:
+        value = int(days)
+    except ValueError:
+        value = -1
+    if not 0 <= value <= originals.KEEP_DAYS_MAX:
+        return _settings_error(
+            request,
+            templates,
+            f"Los días tienen que ser un número entre 0 y {originals.KEEP_DAYS_MAX}.",
+        )
+    settings_repo.set(db, originals.KEEP_DAYS_KEY, str(value))
+    return RedirectResponse(url="/settings?saved=keep-originals", status_code=303)
 
 
 @router.post("/settings/problem-alerts", response_class=HTMLResponse)

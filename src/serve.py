@@ -71,6 +71,11 @@ def main():
     storyboards = StoryboardWorker(db_path, get_connection, ffmpeg_path=ffmpeg_path)
     storyboards.start()
 
+    # Hourly: delete expired kept originals, daily hub.db backup.
+    from supervisor.housekeeping import Housekeeping
+
+    Housekeeping(db_path, get_connection, output_dir).start()
+
     app = create_app(db_path, supervisor, output_dir)
     app.state.storyboards = storyboards
 

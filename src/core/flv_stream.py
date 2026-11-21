@@ -62,7 +62,10 @@ class FlvNormalizer:
     `new_connection()` before feeding bytes from a re-opened stream.
     """
 
-    def __init__(self, on_video_frame=None):
+    def __init__(self, on_video_frame=None, stats=None):
+        # Optional `stats` (core.stream_stats.StreamStats) counts what
+        # arrived; like the listener below, its errors never stop a recording.
+        self._stats = stats
         # Optional `on_video_frame(output_ts_ms, tag_payload)` for every video
         # frame written (used to read TikTok's layout SEI). Its errors are
         # swallowed: it must never affect the recording.
@@ -101,6 +104,7 @@ class FlvNormalizer:
             header = bytes(self._buffer[: header_len + 4])
             del self._buffer[: header_len + 4]
             self._expect_header = False
+            self._count("connection")
             if self._header is None:
                 self._header = header
                 out += header
@@ -143,6 +147,7 @@ class FlvNormalizer:
         is_config = tag_type == _TAG_SCRIPT or _is_sequence_header(tag_type, data)
         if tag_type != _TAG_SCRIPT and is_config:
             self._sequence_headers[tag_type] = bytes(tag)
+            self._count("config", tag_type, bytes(data))
 
         if is_config:
             # Config/metadata tags carry no media time of their own (TikTok
@@ -174,6 +179,7 @@ class FlvNormalizer:
             out_ts if self._last_out_ts is None else max(self._last_out_ts, out_ts)
         )
 
+        self._count("frame", tag_type, out_ts, len(data))
         if self._on_video_frame is not None and tag_type == _TAG_VIDEO:
             try:
                 self._on_video_frame(out_ts, data)
@@ -186,6 +192,15 @@ class FlvNormalizer:
         self._pending.clear()
         out += self._stamp(tag, out_ts)
         return bytes(out)
+
+    def _count(self, event, *args):
+        if self._stats is None:
+            return
+        try:
+            getattr(self._stats, event)(*args)
+        except Exception as e:
+            logger.warning(f"Stream stats disabled: {e}")
+            self._stats = None
 
     @staticmethod
     def _stamp(tag, out_ts):
@@ -224,13 +239,19 @@ class TsRemuxer:
     """
 
     def __init__(
-        self, output_path, ffmpeg_path=None, max_restarts=20, on_video_frame=None
+        self,
+        output_path,
+        ffmpeg_path=None,
+        max_restarts=20,
+        on_video_frame=None,
+        stats=None,
     ):
         self.output_path = output_path
+        self._stats = stats
         self._ffmpeg = ffmpeg_path or "ffmpeg"
         self._max_restarts = max_restarts
         self._restarts = 0
-        self._normalizer = FlvNormalizer(on_video_frame=on_video_frame)
+        self._normalizer = FlvNormalizer(on_video_frame=on_video_frame, stats=stats)
         self._proc = None
         self._out_file = open(output_path, "ab")
         self._stderr_tail = deque(maxlen=20)
@@ -298,6 +319,11 @@ class TsRemuxer:
             raise RuntimeError(f"ffmpeg remuxer keeps failing: {detail}")
         self._restarts += 1
         logger.warning(f"ffmpeg remuxer died ({detail}); restarting it")
+        if self._stats is not None:
+            try:
+                self._stats.ffmpeg_restart(detail)
+            except Exception:
+                pass
         self._start()
         prefix = self._normalizer.restart_prefix()
         self._proc.stdin.write(prefix + data)

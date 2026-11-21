@@ -188,7 +188,62 @@ def test_upload_converted_replaces_raw_recording(client, app, tmp_path, monkeypa
     assert recording["file_path"].endswith(".mp4")
     assert recording["duration_seconds"] == 61
     assert Path(recording["file_path"]).read_bytes() == b"mp4 bytes"
+    # The raw file is kept for a few days in case the conversion is broken.
+    assert raw.exists() and recording["original_path"] == str(raw)
+    assert recording["original_kept_at"]
+
+    original = client.get(f"/media/{recording_id}/original")
+    assert original.status_code == 200 and original.content == b"raw transport stream"
+    assert "attachment" in original.headers["content-disposition"]
+
+    page = client.get(f"/library?recording_id={recording_id}")
+    assert "Descargar original (.ts)" in page.text
+
+    # Deleting the recording deletes the kept original too.
+    assert client.delete(f"/recordings/{recording_id}").status_code == 200
     assert not raw.exists()
+
+
+def test_upload_converted_deletes_raw_when_keeping_is_off(
+    client, app, tmp_path, monkeypatch
+):
+    from db import settings_repo
+    from supervisor import originals
+
+    monkeypatch.setattr(media_module, "_probe", _fake_probe())
+    monkeypatch.setattr(media_module, "generate_thumbnail", lambda path: None)
+    conn, recording_id, raw = _raw_recording(app, tmp_path)
+    settings_repo.set(conn, originals.KEEP_DAYS_KEY, "0")
+
+    response = client.put(f"/recordings/{recording_id}/converted", content=b"mp4 bytes")
+
+    assert response.status_code == 200
+    assert not raw.exists()
+    assert recordings_repo.get(conn, recording_id)["original_path"] is None
+    assert client.get(f"/media/{recording_id}/original").status_code == 404
+
+
+def test_stream_stats_download_and_warning(client, app, tmp_path):
+    conn, recording_id, raw = _raw_recording(app, tmp_path)
+    stats = raw.with_suffix(".stats.json")
+    stats.write_text(
+        json.dumps(
+            {
+                "media_seconds": 600,
+                "audio": {"gaps": [[100, 400]]},
+                "video": {"gaps": []},
+                "connections": [{"at": 0}, {"at": 300}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert client.get(f"/recordings/{recording_id}/stats").status_code == 200
+    page = client.get(f"/library?recording_id={recording_id}")
+    assert "sin audio al grabar" in page.text and "0:05:00" in page.text
+
+    client.delete(f"/recordings/{recording_id}")
+    assert not stats.exists()
 
 
 def test_upload_converted_rejects_non_browser_codec(client, app, tmp_path, monkeypatch):

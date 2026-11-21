@@ -58,7 +58,29 @@ copies of the `*.example` files.
 - The user converts on their own PC (RTX 4070, NVENC) and uploads the MP4:
   `PUT /recordings/{id}/converted` streams the body to `<name>.mp4.part`,
   validates it with ffprobe (MP4 container, H.264/AV1/VP9), then swaps it
-  in and deletes the raw file. Any failure leaves the raw untouched.
+  in. Any failure leaves the raw untouched.
+- Kept originals (user decision 2026-11-20, after an MP4 came out with
+  half its audio missing and there was nothing left to check):
+  `supervisor/originals.py`. The replaced raw stays where it was, the row
+  keeps `original_path` / `original_kept_at`, for `keep_originals_days`
+  (Settings "Originales y copias de seguridad", default 7, 0-60, 0 = delete
+  at once). Downloadable from the library header (`/media/{id}/original`),
+  deleted with the recording. The hourly `Housekeeping` thread deletes
+  expired ones, and the oldest ones early while the recordings disk has
+  less than `HUB_ORIGINALS_MIN_FREE_GB` (default 30) free.
+- Stream stats: `core/stream_stats.py` `StreamStats`, fed by
+  `FlvNormalizer(stats=...)` at tag level, saved every 60 s and at the end
+  as `<recording>.stats.json` (kept after conversion, deleted with the
+  recording): audio/video frames+bytes per minute, gaps (> 2 s on the video
+  timeline, `null` end = until the end), connections with wall time,
+  codec config changes, ffmpeg restarts. A muted mic still sends silent
+  AAC frames, so a gap means TikTok sent no audio; silence shows as low
+  audio bytes per minute. The library header warns "sin audio/video al
+  grabar" and links the JSON ("diagnóstico"). Ask the user for it when a
+  recording looks broken.
+- Daily `hub.db` backup (`supervisor/backups.py`, SQLite backup API) to
+  `HUB_BACKUP_DIR` (default `OUTPUT_DIR/backups`, same disk) as
+  `hub-YYYY-MM-DD.db` (UTC date), newest 14 kept.
 - The ffmpeg command is built in one place, `web/convert.py`
   (encoder/resolution/quality presets, file or PowerShell folder loop).
   The library page fetches it from `/api/convert/command`; the auto-convert
@@ -293,11 +315,25 @@ Agreed but not built yet. Move items out of here when they ship.
 
 - **Upload safety.** `PUT /recordings/{id}/converted` only checks that the
   file is a browser-playable MP4; the MP4 of a *different* live is
-  accepted, swapped in, and the raw `.ts` is deleted (unrecoverable).
+  accepted and swapped in (the raw is now kept for `keep_originals_days`,
+  so it's recoverable for a while, but nothing warns).
   - [ ] Server: ffprobe raw vs upload and reject (raw untouched) if the
     durations differ by more than `max(10 s, 2 %)`.
   - [ ] Browser: if the dropped file isn't named `<raw stem>.mp4`, ask for
     confirmation before uploading (warning, not a block).
+- **Audio/video watchdog** (agreed 2026-11-20, user chose to do kept
+  originals + stream stats + backups first). With the StreamStats counts:
+  no audio (or no video) for ~30-60 s of video while the other keeps
+  arriving -> force a reconnect (same path as a dropped connection, the
+  normalizer splices it, ~2-5 s lost). Backoff (e.g. 2 min, 5 min), give
+  up after 2-3 tries, keep recording what arrives and send a Discord
+  problem alert. Don't reconnect on video missing during a paused live.
+  Log each attempt in the stats file.
+- **Conversion checks** (discussed 2026-11-20, after real stats data):
+  on upload, compare audio vs video stream duration and the raw's
+  duration; measure long silences on the PC during conversion
+  (`aresample=async=1` pads gaps with silence, so a "full" audio track can
+  be mute) and compare with the raw's stats.
 - **Guest source for 3+ linked creators.** Checked on the hub 2026-11-20:
   - Room info never lists more than one id; `linked_user_list` /
     `show_user_list` are always empty. In a 4-panel co-host

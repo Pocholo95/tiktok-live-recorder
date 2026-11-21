@@ -10,11 +10,18 @@
         {% if r.duration_seconds %}<span>{{ r.duration_seconds | hhmmss }}</span>{% endif %}
         {% if r.file_size_bytes %}<span>{{ r.file_size_bytes | filesize }}</span>{% endif %}
         <span class="mono">.{{ r.format }}</span>
+        {% if stream %}
+        {% if stream.audio_missing %}<span class="stream-warn" title="{{ stream.audio_gaps }} tramo(s) en los que TikTok no mandó audio mientras grababa">⚠ {{ stream.audio_missing | hhmmss }} sin audio al grabar</span>{% endif %}
+        {% if stream.video_missing %}<span class="stream-warn" title="{{ stream.video_gaps }} tramo(s) en los que TikTok no mandó video mientras grababa">⚠ {{ stream.video_missing | hhmmss }} sin video al grabar</span>{% endif %}
+        <a class="muted" href="/recordings/{{ r.id }}/stats" title="Qué llegó de TikTok: audio y video por minuto, cortes{% if stream.reconnects %} ({{ stream.reconnects }}){% endif %}, cambios de resolución">diagnóstico</a>
+        {% endif %}
+        {% if original %}<span class="muted" title="El .ts original se guarda por si la conversión salió mal; después se borra solo">original guardado{% if original.until %} hasta <span data-utc-date="{{ original.until }}">{{ original.until[:10] }}</span>{% endif %}</span>{% endif %}
       </p>
     </div>
     <div class="rec-head-actions">
       {% if r.status == "completed" %}
       <a class="btn btn-ghost" href="/media/{{ r.id }}/download">Descargar {{ "MP4" if r.format == "mp4" else "crudo" }}</a>
+      {% if original %}<a class="btn btn-ghost" href="/media/{{ r.id }}/original" title="{{ original.size | filesize }}">Descargar original (.ts)</a>{% endif %}
       {% endif %}
       <button type="button" class="btn btn-danger" data-delete-recording="{{ r.id }}" data-username="{{ r.username }}">Eliminar</button>
     </div>

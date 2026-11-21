@@ -157,3 +157,23 @@ def test_participants_interval_saved_and_validated(client, app):
     conn = get_connection(app.state.db_path)
     assert settings_repo.get(conn, "participants_poll_seconds") == "45"
     assert 'name="seconds" value="45"' in client.get("/settings").text
+
+
+def test_keep_originals_days_saved_and_validated(client, app):
+    from db import settings_repo
+    from db.database import get_connection
+
+    page = client.get("/settings").text
+    assert 'name="days" value="7"' in page
+    assert "Todavía no se hizo ninguna" in page
+
+    bad = client.post("/settings/keep-originals", data={"days": "99"})
+    assert "entre 0 y 60" in bad.text
+
+    ok = client.post(
+        "/settings/keep-originals", data={"days": "3"}, follow_redirects=False
+    )
+    assert ok.status_code == 303
+    conn = get_connection(app.state.db_path)
+    assert settings_repo.get(conn, "keep_originals_days") == "3"
+    assert 'name="days" value="3"' in client.get("/settings").text

@@ -439,6 +439,7 @@ table.channels-table {
 }
 
 .rec-head-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.stream-warn { color: var(--warn); font-weight: 600; }
 
 .state-panel { display: flex; align-items: center; gap: 1.25rem; }
 .state-panel p { margin: 0.35rem 0 0; }

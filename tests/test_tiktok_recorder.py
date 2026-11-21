@@ -143,9 +143,10 @@ class _FakeRemuxer:
 
     instances = []
 
-    def __init__(self, output_path, ffmpeg_path=None, on_video_frame=None):
+    def __init__(self, output_path, ffmpeg_path=None, on_video_frame=None, stats=None):
         self.output_path = output_path
         self.on_video_frame = on_video_frame
+        self.stats = stats
         self.chunks = []
         self.connections = 1
         self.closed = False

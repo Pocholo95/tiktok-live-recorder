@@ -35,6 +35,7 @@ def init_db(db_path):
 # it here (with its default) on the next boot.
 _ADDED_COLUMNS = {
     "channels": [("smart_interval", "INTEGER NOT NULL DEFAULT 0")],
+    "recordings": [("original_path", "TEXT"), ("original_kept_at", "TEXT")],
 }
 
 

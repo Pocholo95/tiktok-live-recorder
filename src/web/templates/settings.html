@@ -7,6 +7,7 @@
 {% if saved == "telegram" %}<p class="saved-banner">telegram.json actualizado.</p>{% endif %}
 {% if saved == "participants" %}<p class="saved-banner">Intervalo guardado: se aplica también a los lives que se están grabando.</p>{% endif %}
 {% if saved == "reconnect-grace" %}<p class="saved-banner">Espera guardada: se aplica desde el próximo corte, también en lives que se están grabando.</p>{% endif %}
+{% if saved == "keep-originals" %}<p class="saved-banner">Días guardados: se aplica también a los originales que ya estaban guardados.</p>{% endif %}
 {% if saved == "problem-alerts" %}<p class="saved-banner">Preferencia de avisos de problemas guardada.</p>{% endif %}
 {% if saved == "discord" %}<p class="saved-banner">Webhook de Discord guardado. Probalo con "Enviar aviso de prueba".</p>{% endif %}
 {% if saved == "discord-cleared" %}<p class="saved-banner">Webhook de Discord quitado: no se van a mandar avisos.</p>{% endif %}
@@ -113,6 +114,30 @@
   </label>
   {% if not discord_status %}<span class="hint">Primero configurá el webhook de arriba.</span>{% endif %}
 </form>
+
+<h2>Originales y copias de seguridad</h2>
+<p class="hint settings-intro">
+  Cuando subís un MP4 convertido, el <strong>.ts original</strong> no se borra enseguida:
+  se guarda estos días por si la conversión salió mal (sin audio, cortada, el live
+  equivocado) y lo querés revisar o volver a convertir. Lo descargás desde la
+  grabación en la Biblioteca. Si el disco baja de {{ originals_min_free | filesize }}
+  libres, se borran antes los más viejos. Con 0 se borra apenas llega el MP4.
+</p>
+<form method="post" action="/settings/keep-originals" class="settings-form">
+  <label>
+    Guardar originales (días)
+    <span class="hint">entre 0 y {{ keep_days_max }} · ahora {{ originals.count }} guardado{{ "s" if originals.count != 1 }}{% if originals.count %}, {{ originals.bytes | filesize }}{% endif %}</span>
+    <input type="number" name="days" value="{{ keep_days }}" min="0" max="{{ keep_days_max }}" step="1" required>
+  </label>
+  <button type="submit">Guardar días</button>
+</form>
+<p class="hint settings-intro">
+  Copia diaria de la base de datos (clips, invitados, horarios, ajustes) en
+  <span class="mono">{{ backup_dir }}</span>, se guardan las últimas {{ backup_keep }}.
+  {% if last_backup %}Última: <span data-utc-date="{{ last_backup }} 00:00:00">{{ last_backup }}</span>.{% else %}Todavía no se hizo ninguna.{% endif %}
+  Está en el mismo disco que las grabaciones: si querés que sobreviva a ese disco,
+  definí <span class="mono">HUB_BACKUP_DIR</span> apuntando a otro.
+</p>
 
 <details class="settings-legacy">
   <summary>Cuenta de Telegram (Telethon, para subir videos desde el CLI)</summary>

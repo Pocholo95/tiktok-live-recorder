@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
+from core import stream_stats
 from db import profiles_repo, recordings_repo
 from db.database import get_connection
-from supervisor import storyboards
+from supervisor import originals, storyboards
 from supervisor.thumbnails import generate_thumbnail
 from utils.logger_manager import logger
 from web.deps import get_db
@@ -61,6 +62,15 @@ def download_media(recording_id: int, db=Depends(get_db)):
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Recording file not found on disk")
 
+    return FileResponse(path, filename=path.name)
+
+
+@router.get("/media/{recording_id}/original")
+def download_original(recording_id: int, db=Depends(get_db)):
+    """The raw .ts a conversion replaced, while it's still kept."""
+    path = originals.available(recordings_repo.get(db, recording_id))
+    if path is None:
+        raise HTTPException(status_code=404, detail="Original not kept")
     return FileResponse(path, filename=path.name)
 
 
@@ -237,8 +247,9 @@ def _finalize_upload(db_path, recording_id, part_path, final_path):
             duration_seconds=duration,
             thumbnail_path=thumbnail_path,
         )
-        if raw_path != final_path:
-            raw_path.unlink(missing_ok=True)
+        # The raw file is kept for a few days (Settings) in case the
+        # conversion turns out broken; see supervisor/originals.py.
+        originals.after_conversion(conn, recording_id, raw_path, final_path)
     finally:
         conn.close()
 
@@ -375,6 +386,18 @@ def _image_type(path):
     if head[1:4] == b"PNG":
         return "image/png"
     return "image/jpeg"
+
+
+@router.get("/recordings/{recording_id}/stats")
+def download_stream_stats(recording_id: int, db=Depends(get_db)):
+    """What arrived from TikTok while recording (core/stream_stats.py)."""
+    recording = recordings_repo.get(db, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    path = stream_stats.stats_path(recording["file_path"])
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="No stats for this recording")
+    return FileResponse(path, media_type="application/json", filename=path.name)
 
 
 def participants_debug_path(recording_file_path):

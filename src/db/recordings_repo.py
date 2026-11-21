@@ -133,6 +133,40 @@ def replace_with_converted(
     conn.commit()
 
 
+def keep_original(conn, recording_id, original_path):
+    """Remember the raw file that a conversion replaced (kept for a while)."""
+    conn.execute(
+        """
+        UPDATE recordings
+        SET original_path = ?, original_kept_at = datetime('now')
+        WHERE id = ?
+        """,
+        (original_path, recording_id),
+    )
+    conn.commit()
+
+
+def forget_original(conn, recording_id):
+    conn.execute(
+        """
+        UPDATE recordings SET original_path = NULL, original_kept_at = NULL
+        WHERE id = ?
+        """,
+        (recording_id,),
+    )
+    conn.commit()
+
+
+def with_originals(conn):
+    """Recordings that still keep their raw file, oldest kept first."""
+    return conn.execute(
+        """
+        SELECT * FROM recordings WHERE original_path IS NOT NULL
+        ORDER BY original_kept_at, id
+        """
+    ).fetchall()
+
+
 _SUMMARY_COLUMNS = f"""
     COUNT(*) AS total,
     SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed,

@@ -8,6 +8,7 @@ from requests import RequestException
 from core.flv_stream import TsRemuxer
 from core.layout import LayoutTracker
 from core.participants import ParticipantTracker
+from core.stream_stats import StreamStats, stats_path
 from core.tiktok_api import TikTokAPI
 from utils.custom_exceptions import LiveNotFound, TikTokRecorderError, UserLiveError
 from utils.enums import Error, Mode, TikTokError, TimeOut
@@ -401,10 +402,12 @@ class TikTokRecorder:
             # to MPEG-TS on the fly - see core/flv_stream.py. No transcode
             # happens on this machine; the MP4 is made offline on a GPU.
             layout = self._layout
+            stats = StreamStats(stats_path(output))
             remuxer = TsRemuxer(
                 output,
                 ffmpeg_path=self.ffmpeg_path,
                 on_video_frame=layout.feed_video if layout is not None else None,
+                stats=stats,
             )
             self._remuxer = remuxer
             try:
@@ -438,6 +441,7 @@ class TikTokRecorder:
                         for chunk in self.tiktok.download_live_stream(live_url):
                             remuxer.write(chunk)
                             bytes_written += len(chunk)
+                            stats.maybe_save()
 
                             elapsed_time = time.time() - start_time
                             if self.duration and elapsed_time >= self.duration:
@@ -477,7 +481,9 @@ class TikTokRecorder:
                 remuxer.close()
 
             if bytes_written >= min_stream_bytes:
+                stats.save(final=True)
                 break
+            stats.discard()
 
             # The remuxer appends, so a dud candidate's few bytes must not
             # end up in front of the next candidate's stream.

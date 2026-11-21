@@ -24,7 +24,10 @@ CREATE TABLE IF NOT EXISTS recordings (
     duration_seconds INTEGER,
     file_size_bytes INTEGER,
     thumbnail_path TEXT,
-    error_message TEXT
+    error_message TEXT,
+    -- Raw .ts kept for a while after conversion (supervisor/originals.py).
+    original_path TEXT,
+    original_kept_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_recordings_channel ON recordings(channel_id);

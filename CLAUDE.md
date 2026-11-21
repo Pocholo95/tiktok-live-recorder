@@ -509,8 +509,8 @@ their own PC, reviewing in the web UI):
    again unless that changes. (If ever built: the auto-convert script and
    its `/api/*`, `/media/*/download`, `/recordings/*/converted` calls must
    authenticate too.)
-3. Disk care: Discord alert below a free-space threshold; optional cleanup
-   of old raws / recordings older than N days, per channel.
+3. ~~Disk care alert~~ - declined 2026-11-21: the NAS has ~6 TB free.
+   (Kept originals already shrink early under `HUB_ORIGINALS_MIN_FREE_GB`.)
 4. ~~Problem alerts on Discord~~ - shipped 2026-11-06.
 5. ~~Dashboard live info~~ - shipped 2026-11-06.
 6. "Appearances" on creator pages: lives of others where they were a guest.

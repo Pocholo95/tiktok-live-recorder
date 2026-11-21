@@ -8,11 +8,15 @@ mix, about once a second:
     {"app_data": "{\"grids\":[{\"cid\":..,\"uid_str\":..,\"x\":..,...}],
                    \"anchor_link_mic_id\": <creator's uid_str>, ...}", ...}
 
-Each grid is one panel; `cid` is a per-link session id (a new one every time
-someone links in), NOT a user id, so this tells exactly WHEN each guest
-panel appears and disappears (in video time), but not who it is. Names come
-from room info polls (`ParticipantTracker`), which only ever name one
-linked creator at a time and rotate among them - see `LayoutTracker.name`.
+Each grid is one panel. Its `cid` is the room id of that person's OWN live
+(co-hosting creators each keep their live; TikTok mixes the pictures) -
+found 2026-11-21 and checked on a 4-person co-host - so asking room info
+for room `cid` names the panel exactly (`name_by_cid`, done by
+`ParticipantTracker` once per panel). `uid_str` is "<cid>_<n>_0". When that
+lookup fails (age-restricted room without a session, a viewer guest with no
+live of their own?) the old fallback applies: names from the recorded
+room's own info, which names one linked creator at a time and rotates -
+see `LayoutTracker.name`.
 
 Everything here is best-effort: a parsing failure only means no layout.
 """
@@ -80,6 +84,8 @@ class LayoutTracker:
         self._missing = {}  # cid -> media time it was first missing
         self._last_seen = None  # media time of the last layout update
         self._parsed_at = None  # media ms of the last parsed frame
+        self._cid_names = {}  # cid -> @handle from its room info (or None)
+        self._looking_up = False  # someone looks cids up (cids_to_look_up)
         self.seen_any = False
 
     def feed_video(self, media_ms, data):
@@ -104,7 +110,9 @@ class LayoutTracker:
                 self._missing.pop(cid, None)
                 if cid not in self._open:
                     panel = {"cid": cid, "start": media_seconds, "end": None}
-                    panel["name"] = None
+                    # A cid seen before (left and came back) keeps its name.
+                    panel["name"] = self._cid_names.get(cid)
+                    panel["box"] = panels[cid]
                     self._panels.append(panel)
                     self._open[cid] = panel
             for cid in list(self._open):
@@ -135,20 +143,44 @@ class LayoutTracker:
         panel["end"] = round(max(at, panel["start"]), 1)
         self._missing.pop(cid, None)
 
+    def cids_to_look_up(self):
+        """Panels on screen whose cid (= their room id) wasn't looked up."""
+        with self._lock:
+            self._looking_up = True
+            return [cid for cid in self._open if cid not in self._cid_names]
+
+    def name_by_cid(self, cid, username):
+        """Result of looking up room `cid`'s owner (None = lookup failed:
+        the panel is left to the room-info fallback). A real name replaces
+        any guess the fallback made for that panel."""
+        with self._lock:
+            self._cid_names[cid] = username
+            if username:
+                for panel in self._panels:
+                    if panel["cid"] == cid:
+                        panel["name"] = username
+                        panel["named_by"] = "cid"
+
     def name(self, usernames):
         """
-        Puts names from a room-info poll on panels. Room info names one
-        linked creator at a time (rotating), so a name not yet on screen
-        goes to the newest panel still without one: guests mostly link in
-        one by one, and the poll after a new panel appears is the likeliest
-        to name it.
+        Fallback for panels whose cid lookup failed: names from a room-info
+        poll. Room info names one linked creator at a time (rotating), so a
+        name not yet on screen goes to the newest panel still without one:
+        guests mostly link in one by one, and the poll after a new panel
+        appears is the likeliest to name it. Panels whose cid is still to
+        be looked up are skipped, so a guess never beats the exact name.
         """
         with self._lock:
             on_screen = {p["name"] for p in self._open.values() if p["name"]}
             for username in usernames:
                 if username in on_screen:
                     continue
-                unnamed = [p for p in self._open.values() if p["name"] is None]
+                unnamed = [
+                    p
+                    for p in self._open.values()
+                    if p["name"] is None
+                    and (not self._looking_up or p["cid"] in self._cid_names)
+                ]
                 if not unnamed:
                     return
                 newest = max(unnamed, key=lambda p: p["start"])
@@ -173,4 +205,7 @@ class LayoutTracker:
 
     def debug_state(self):
         with self._lock:
-            return {cid: p["name"] for cid, p in self._open.items()}
+            return {
+                cid: {"name": p["name"], "by": p.get("named_by"), "box": p.get("box")}
+                for cid, p in self._open.items()
+            }

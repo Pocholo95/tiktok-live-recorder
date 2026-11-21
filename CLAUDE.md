@@ -273,10 +273,20 @@ copies of the `*.example` files.
   (`{"app_data": "{\"grids\":[...], \"anchor_link_mic_id\": ...}"}`, ~1/s)
   from every video frame via `FlvNormalizer(on_video_frame=...)` (byte
   search, at most one JSON parse per second of video). Each grid except
-  the creator's (`anchor_link_mic_id`) is a guest panel; `cid` is a
-  per-link session id, not a user. A panel missing 5 s is gone; no layout
-  for 10 s = solo again. Room-info polls only add names: a name not on
-  screen yet goes to the NEWEST unnamed open panel (`LayoutTracker.name`).
+  the creator's (`anchor_link_mic_id`) is a guest panel. A panel missing 5 s
+  is gone; no layout for 10 s = solo again. Names (found and shipped
+  2026-11-21): a panel's `cid` is the room id of that person's OWN live, so
+  each poll first asks room info for every new cid's owner
+  (`TikTokAPI.get_room_owner`, once per panel, max 8 per poll, cached per
+  cid so a returning guest keeps the name) - checked on recording 43's
+  saved cids and live on a 4-person co-host, where it named all 3 guests
+  while room info showed only 1. Only when that lookup fails (age-
+  restricted room without a working session; viewer guests without a live
+  of their own - untested) do room-info polls name the panel: a name not
+  on screen yet goes to the NEWEST unnamed panel (`LayoutTracker.name`),
+  and an exact cid name later replaces such a guess. Panels keep their
+  box (x/y/w/h); `.participants.jsonl` "panels" lines log
+  {cid: {name, by, box}}.
   Once a recording has seen any layout, the snapshot comes from the panels
   (unnamed ones saved with username "" and shown as "Sin identificar",
   excluded from counts, list pills and dashboard); without layout the old
@@ -380,7 +390,11 @@ Agreed but not built yet. Move items out of here when they ship.
   duration; measure long silences on the PC during conversion
   (`aresample=async=1` pads gaps with silence, so a "full" audio track can
   be mute) and compare with the raw's stats.
-- **Guest source for 3+ linked creators.** Checked on the hub 2026-11-20:
+- **Guest source for 3+ linked creators** - solved 2026-11-21 by naming
+  panels by cid (see "Web hub"). Next possible steps: show who is where
+  (panel boxes are stored in memory/debug, not in the DB yet); "appearances"
+  on creator pages; re-name old "Sin identificar" rows from the cids in
+  their `.participants.jsonl`. History, checked on the hub 2026-11-20:
   - Room info never lists more than one id; `linked_user_list` /
     `show_user_list` are always empty. In a 4-panel co-host
     (`link_mic.channel_info.layout = 4`, recording 39) `rival_anchor_id`
@@ -390,8 +404,8 @@ Agreed but not built yet. Move items out of here when they ship.
     `{"app_data":"{\"grids\":[{id,x,y,w,h,uid_str,cid,talk,...}]}"}`
     (normalized panel boxes), `{"infos":[{uid,talk,volume}]}` (who is
     speaking, several times a second) and `anchor_linkmic_id` (the
-    creator's own panel). `cid` / `uid_str` are per-link session ids, not
-    user ids, so SEI gives exact when/where but not who.
+    creator's own panel). (Corrected 2026-11-21: `cid` is the guest's own
+    room id, `uid_str` = "<cid>_<n>_0" - so SEI does give who.)
   - Websocket sources (TikTokLive / TikTok-Live-Connector) declined by
     the user 2026-11-20: they depend on Euler Stream signing. Don't
     propose them again.
@@ -399,7 +413,7 @@ Agreed but not built yet. Move items out of here when they ship.
     "Web hub"); the user is trying it for a few days. Next possible step:
     the panel's position (x/y/w/h is in the SEI) to show who is where.
 
-### Research leads (2026-11-21, topic 2 "guests" not researched yet)
+### Research leads (2026-11-21; the guests topic led to cid naming)
 
 - `https://www.tiktok.com/api-live/user/room?aid=1988&sourceType=54&uniqueId=<user>`
   answers WITHOUT signing (streamlink uses it; checked 2026-11-21): roomId,

@@ -148,3 +148,70 @@ def test_tracker_keeps_unnamed_panels_when_room_info_fails():
     now[0] = 30
     tracker.poll_once()
     assert snapshots[-1] == [{"username": "", "start_seconds": 5, "end_seconds": None}]
+
+
+class _OwnerApi(_Api):
+    """Room info of the recorded room rotates like _Api; `get_room_owner`
+    answers for guests' own rooms (their panel cid)."""
+
+    def __init__(self, rooms, handles, owners):
+        super().__init__(rooms, handles)
+        self.owners = owners
+        self.owner_lookups = []
+
+    def get_room_owner(self, room_id):
+        self.owner_lookups.append(room_id)
+        owner = self.owners.get(room_id)
+        if isinstance(owner, Exception):
+            raise owner
+        return owner
+
+
+def test_tracker_names_panels_by_their_room_id(tmp_path):
+    now = [0.0]
+    snapshots = []
+    layout = LayoutTracker()
+    # Room info only ever names "ana" (rotation stuck on one) - the cid
+    # lookups name everyone exactly, including who room info never shows.
+    api = _OwnerApi(
+        [_room("200000000000")] * 3,
+        _HANDLES,
+        {"111": "carla", "222": "dani", "333": None},  # 333: lookup refused
+    )
+    tracker = ParticipantTracker(
+        api, "room", snapshots.append, clock=lambda: now[0], layout=layout,
+        debug_path=str(tmp_path / "d.jsonl"),
+    )  # fmt: skip
+
+    layout.observe(5, _app_data("111", "222", "333"))
+    for t in (30, 60, 90):
+        layout.observe(t - 1, _app_data("111", "222", "333"))
+        now[0] = t
+        tracker.poll_once()
+    tracker.stop()
+
+    names = sorted(p["username"] for p in snapshots[-1])
+    # 333's room refused the lookup: the room-info fallback names it.
+    assert names == ["ana", "carla", "dani"]
+    assert sorted(api.owner_lookups) == ["111", "222", "333"]  # once each
+    lines = (tmp_path / "d.jsonl").read_text(encoding="utf-8")
+    assert '"by": "cid"' in lines and '"box"' in lines
+
+
+def test_cid_name_replaces_an_earlier_guess():
+    layout = LayoutTracker()
+    layout.observe(5, _app_data("111"))
+    layout.name(["ana"])  # fallback guess before any lookup ran
+    assert layout.snapshot()[0]["username"] == "ana"
+
+    assert layout.cids_to_look_up() == ["111"]
+    layout.name_by_cid("111", "carla")
+    assert layout.snapshot()[0]["username"] == "carla"
+    assert layout.cids_to_look_up() == []
+
+    # Leaves and comes back: same cid keeps its name without a new lookup.
+    layout.observe(20, _app_data())
+    layout.observe(26, _app_data())  # gone for 6 s: panel closed
+    layout.observe(30, _app_data("111"))
+    assert [p["username"] for p in layout.snapshot()] == ["carla", "carla"]
+    assert layout.cids_to_look_up() == []

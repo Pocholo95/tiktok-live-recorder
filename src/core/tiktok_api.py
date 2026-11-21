@@ -146,6 +146,22 @@ class TikTokAPI:
             return None
         return room_info.get("data") or None
 
+    def get_room_owner(self, room_id):
+        """@handle of whoever hosts `room_id`, or None (unknown room, or
+        TikTok refused it - e.g. 4003110 for an age-restricted live without
+        a working session). Doesn't touch `last_room_status_code`, which
+        belongs to the recorded room."""
+        try:
+            info = self.http_client.get(
+                f"{self.WEBCAST_URL}/webcast/room/info/?aid=1988&room_id={room_id}"
+            ).json()
+        except Exception:
+            return None
+        if info.get("status_code", 0) != 0:
+            return None
+        owner = (info.get("data") or {}).get("owner") or {}
+        return owner.get("display_id") or None
+
     def get_sec_uid(self):
         """
         Returns the sec_uid of the authenticated user.

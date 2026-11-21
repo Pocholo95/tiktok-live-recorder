@@ -21,6 +21,9 @@ import time
 from utils.logger_manager import logger
 
 POLL_SECONDS = 30
+# New guest panels named per poll (one room-info request each, once per
+# panel); more wait for the next poll.
+MAX_ROOM_LOOKUPS_PER_POLL = 8
 ACCESS_DENIED = 4003110  # room info refused: age-restricted, no working session
 MIN_POLL_SECONDS = 10
 MAX_POLL_SECONDS = 600
@@ -207,6 +210,9 @@ class ParticipantTracker:
             self._stop.wait(self._current_interval())
 
     def poll_once(self):
+        # Exact names first: each new panel's cid is that person's room id.
+        if self._layout is not None and self._layout.seen_any:
+            self._name_panels_by_room()
         try:
             self._poll_room()
         finally:
@@ -241,6 +247,17 @@ class ParticipantTracker:
         if self._layout is not None:
             self._layout.name(sorted(resolved.values()))
         self._update(set(resolved.values()))
+
+    def _name_panels_by_room(self):
+        lookup = getattr(self._api, "get_room_owner", None)
+        if lookup is None:
+            return
+        for cid in self._layout.cids_to_look_up()[:MAX_ROOM_LOOKUPS_PER_POLL]:
+            try:
+                owner = lookup(cid)
+            except Exception:
+                owner = None
+            self._layout.name_by_cid(cid, owner)
 
     def _report_access_denied(self):
         code = getattr(self._api, "last_room_status_code", None)

@@ -173,3 +173,113 @@ def test_get_live_url_candidates_returns_ordered_unique_streams():
         "https://cdn/audio.flv",
         "https://cdn/sd.flv",
     ]
+
+
+def _sdk_room(status, data, qualities=()):
+    import json as _json
+
+    return {
+        "data": {
+            "status": status,
+            "stream_url": {
+                "live_core_sdk_data": {
+                    "pull_data": {
+                        "stream_data": _json.dumps({"data": data}),
+                        "options": {"qualities": list(qualities)},
+                    }
+                },
+            },
+        },
+        "status_code": 0,
+    }
+
+
+def _variant(name, vbitrate=0, resolution="", backup=True, hls=True):
+    import json as _json
+
+    main = {
+        "flv": f"https://main/{name}.flv",
+        "sdk_params": _json.dumps(
+            {"vbitrate": vbitrate, "resolution": resolution, "VCodec": "h264"}
+        ),
+    }
+    if hls:
+        main["hls"] = f"https://main/{name}/index.m3u8"
+    entry = {"main": main}
+    if backup:
+        entry["backup"] = {"flv": f"https://backup/{name}.flv"}
+    return entry
+
+
+def test_paused_room_is_still_live():
+    room = _sdk_room(3, {"hd": _variant("hd")}, [{"sdk_key": "hd", "level": 3}])
+    api = build_api({"data": [{"alive": True}], "status_code": 0}, room)
+    assert api.is_room_alive("123") is True
+
+    api = build_api(
+        _sdk_room(3, {"hd": _variant("hd")}, [{"sdk_key": "hd", "level": 3}])
+    )
+    assert api.get_live_url_candidates("123") == ["https://main/hd.flv"]
+
+
+def test_candidates_are_flv_only_best_real_quality_first_with_backups():
+    data = {
+        # TikTok's level says "hd" is best, but "uhd" publishes more bitrate.
+        "hd": _variant("hd", 2_000_000, "720x1280"),
+        "uhd": _variant("uhd", 4_000_000, "1080x1920"),
+        "ld": _variant("ld", 600_000, "360x640"),
+        "ao": _variant("ao", 0, "", backup=False, hls=False),
+    }
+    qualities = [
+        {"sdk_key": "hd", "level": 5},
+        {"sdk_key": "uhd", "level": 4},
+        {"sdk_key": "ld", "level": 1},
+    ]
+    api = build_api(_sdk_room(2, data, qualities))
+
+    urls = api.get_live_url_candidates("123")
+
+    assert urls == [
+        "https://main/uhd.flv",
+        "https://main/hd.flv",
+        "https://main/ld.flv",
+        "https://main/ao.flv",  # audio-only last
+    ]
+    assert not any(u.endswith(".m3u8") for u in urls)
+    assert api.alternate_url("https://main/uhd.flv") == "https://backup/uhd.flv"
+    assert api.alternate_url("https://backup/uhd.flv") == "https://main/uhd.flv"
+    assert api.alternate_url("https://main/ao.flv") is None
+    assert api.stream_info["https://main/uhd.flv"] == {
+        "quality": "uhd",
+        "vbitrate": 4_000_000,
+        "width": 1080,
+        "height": 1920,
+        "codec": "h264",
+        "cdn": "main",
+    }
+    assert api.stream_info["https://backup/hd.flv"]["cdn"] == "backup"
+
+
+def test_stream_connection_has_a_read_timeout():
+    from core import tiktok_api
+
+    calls = []
+
+    class _Response:
+        def iter_content(self, chunk_size):
+            yield b"FLV"
+
+        def close(self):
+            calls.append("closed")
+
+    class _Session:
+        def get(self, url, **kwargs):
+            calls.append(kwargs)
+            return _Response()
+
+    api = TikTokAPI.__new__(TikTokAPI)
+    api._http_client_stream = _Session()
+
+    assert list(api.download_live_stream("https://cdn/x.flv")) == [b"FLV"]
+    assert calls[0] == {"stream": True, "timeout": tiktok_api.STREAM_TIMEOUT}
+    assert calls[-1] == "closed"

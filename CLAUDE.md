@@ -40,6 +40,19 @@ copies of the `*.example` files.
     Pure Python, tag-level, no decoding.
   - `TsRemuxer` pipes that through `ffmpeg -c copy` into an MPEG-TS file,
     restarting ffmpeg (with cached codec headers) if it dies.
+- Stream URLs (`TikTokAPI.get_live_urls`, from the 2026-11-21 research
+  of upstream issues, yt-dlp, streamlink and DouyinLiveRecorder):
+  room `status` 2 = live, 3 = paused (still live), 4 = ended
+  (`LIVE_ROOM_STATUSES`). Candidates are FLV only (an HLS playlist used to
+  end the recording with "not FLV"), ordered by the real quality in each
+  variant's `sdk_params` (vbitrate, then resolution, then TikTok's level),
+  audio-only `ao` last. Each variant has a `main` and a `backup` CDN URL:
+  `stream_info[url]` keeps quality/size/bitrate/codec/cdn and
+  `alternate_url()` swaps main<->backup; the stream watchdog reconnects to
+  the alternate. The stream request has a (10 s, 30 s) connect/read
+  timeout, so a connection that goes silent reconnects instead of hanging
+  (it used to only trip the health monitor's stall alert). Each
+  connection's variant is logged in the stats file (`sources`).
 - Reconnect grace (hub only): when `is_room_alive` says the live is over,
   `TikTokRecorder._wait_for_return` keeps the file open for
   `reconnect_grace_seconds` (Settings "Si el live se corta", default 300 s,
@@ -385,6 +398,23 @@ Agreed but not built yet. Move items out of here when they ship.
   - Built 2026-11-20 as SEI panels + names from the rotating polls (see
     "Web hub"); the user is trying it for a few days. Next possible step:
     the panel's position (x/y/w/h is in the SEI) to show who is where.
+
+### Research leads (2026-11-21, topic 2 "guests" not researched yet)
+
+- `https://www.tiktok.com/api-live/user/room?aid=1988&sourceType=54&uniqueId=<user>`
+  answers WITHOUT signing (streamlink uses it; checked 2026-11-21): roomId,
+  status, stream data, `hevcStreamData` (H.265 variants), and
+  `multiStreamScene` / `multiStreamSource` (meaning unknown - log them
+  during a live with guests). Could replace the tikrec dependency for the
+  room-id lookup and cheaply check whether a candidate guest is live.
+- yt-dlp: when a user is a guest on someone else's live, their own room has
+  no HLS URLs; it falls back to `https://www.tiktok.com/api/live/detail/?aid=1988&roomID=`.
+- The SEI mix layout is the standard RTC "layout SEI" (Alibaba Cloud /
+  Agora document the same uid + x/y/w/h + volume pattern); TikTok's comes
+  from ByteDance's Volcano Engine RTC. No public doc of `cid` found. The
+  panel->user list only travels on the signed webcast websocket (declined).
+- Upstream #439 reports audio drifting out of sync "when the live lags" -
+  the same TikTok behaviour as recording 42; no fix there either.
 
 ### Findings from the live UI review (2026-11-12, not yet chosen)
 

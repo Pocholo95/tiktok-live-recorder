@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 from threading import Event
@@ -562,3 +563,67 @@ def test_stream_watchdog_drops_the_connection_and_reports_it(tmp_path, monkeypat
         {"user": "creator", "kind": "audio"},
         {"user": "creator", "kind": None},
     ]
+
+
+def test_watchdog_reconnect_switches_to_the_backup_cdn(tmp_path, monkeypatch):
+    _FakeRemuxer.instances.clear()
+    monkeypatch.setattr("core.tiktok_recorder.TsRemuxer", _FakeRemuxer)
+
+    class _Watchdog:
+        def __init__(self, stats):
+            self.events = [{"action": "reconnect", "kind": "audio", "attempt": 1}]
+
+        def check(self):
+            return self.events.pop(0) if self.events else None
+
+    monkeypatch.setattr("core.tiktok_recorder.StreamWatchdog", _Watchdog)
+
+    class _API(_StreamingFakeTikTokAPI):
+        stream_info = {
+            "https://main/hd.flv": {
+                "quality": "hd",
+                "width": 720,
+                "height": 1280,
+                "vbitrate": 2000000,
+                "codec": "h264",
+                "cdn": "main",
+            }
+        }
+
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.downloaded = []
+
+        def is_room_alive(self, room_id):
+            self._room_alive_calls += 1
+            return self._room_alive_calls <= 2
+
+        def get_live_url_candidates(self, room_id, user=None):
+            return ["https://main/hd.flv"]
+
+        def alternate_url(self, url):
+            return {"https://main/hd.flv": "https://backup/hd.flv"}.get(url)
+
+        def download_live_stream(self, live_url):
+            self.downloaded.append(live_url)
+            yield from self._stream_chunks
+
+    recorder = TikTokRecorder(
+        RecorderConfig(
+            mode=Mode.MANUAL,
+            user="creator",
+            room_id="1234567890",
+            cookies={},
+            output=str(tmp_path),
+        )
+    )
+    recorder.tiktok = _API(stream_chunks=[b"x" * 5000])
+
+    recorder.start_recording("creator", "1234567890")
+
+    assert recorder.tiktok.downloaded == [
+        "https://main/hd.flv",
+        "https://backup/hd.flv",
+    ]
+    stats = json.loads(next(tmp_path.glob("*.stats.json")).read_text(encoding="utf-8"))
+    assert [s.get("cdn") for s in stats["sources"]] == ["main", None]

@@ -1,6 +1,7 @@
 import html
 import json
 import re
+from urllib.parse import urlparse
 
 from http_utils.http_client import HttpClient
 from utils.enums import StatusCode, TikTokError
@@ -13,6 +14,42 @@ from utils.custom_exceptions import (
 )
 
 
+# Room `status`: 2 = live, 3 = live but paused by the creator, 4 = ended.
+# A pause must not end the recording (upstream #463/#483).
+LIVE_ROOM_STATUSES = frozenset({"2", "3"})
+# Stream connection: (connect, read) seconds. A CDN connection that stays
+# open but stops sending data raises after the read timeout, and the
+# recorder reconnects instead of hanging forever (upstream #478).
+STREAM_TIMEOUT = (10, 30)
+
+
+def _is_hls(url):
+    return urlparse(url).path.lower().endswith((".m3u8", ".m3u"))
+
+
+def _sdk_params(entry):
+    """Quality facts TikTok publishes per variant: bitrate, size, codec."""
+    raw = (entry.get("main") or {}).get("sdk_params")
+    try:
+        params = json.loads(raw) if isinstance(raw, str) else (raw or {})
+    except ValueError:
+        params = {}
+    width = height = 0
+    match = re.match(r"(\d+)x(\d+)", str(params.get("resolution") or ""))
+    if match:
+        width, height = int(match.group(1)), int(match.group(2))
+    try:
+        vbitrate = int(params.get("vbitrate") or 0)
+    except (TypeError, ValueError):
+        vbitrate = 0
+    return {
+        "vbitrate": vbitrate,
+        "width": width,
+        "height": height,
+        "codec": str(params.get("VCodec") or params.get("v_codec") or ""),
+    }
+
+
 class TikTokAPI:
     def __init__(self, proxy, cookies):
         self.BASE_URL = "https://www.tiktok.com"
@@ -22,6 +59,10 @@ class TikTokAPI:
         self.TIKREC_API = "https://tikrec.com"
         self.last_user_info = {}
         self.last_room_status_code = None
+        # Filled by get_live_urls: what each candidate URL is (quality,
+        # resolution, bitrate, codec) and its backup-CDN twin.
+        self.stream_info = {}
+        self._alternates = {}
 
         self.http_client = HttpClient(proxy, cookies).req
         self._http_client_stream = HttpClient(proxy, cookies).req_stream
@@ -75,7 +116,7 @@ class TikTokAPI:
 
         room_data = room_info.get("data") or {}
         room_status = room_data.get("status")
-        if room_status is not None and str(room_status) != "2":
+        if room_status is not None and str(room_status) not in LIVE_ROOM_STATUSES:
             return False
 
         stream_url = room_data.get("stream_url") or {}
@@ -335,8 +376,15 @@ class TikTokAPI:
             return None
 
     def _add_live_url_candidate(self, candidates: list[str], url: str | None) -> None:
-        if url and url not in candidates:
+        # Only FLV: the recorder splices FLV tags (core/flv_stream.py); an
+        # HLS playlist in the list ended the recording with "not FLV".
+        if url and url not in candidates and not _is_hls(url):
             candidates.append(url)
+
+    def alternate_url(self, url):
+        """The same variant on TikTok's backup CDN (or back to the main
+        one), or None. Used when a connection keeps losing audio/video."""
+        return getattr(self, "_alternates", {}).get(url)
 
     def get_live_urls(self, room_id: str, user: str = None) -> list[str]:
         """
@@ -359,14 +407,14 @@ class TikTokAPI:
                     "API blocked by WAF (4003110). Trying fallback: extract stream URL from live page..."
                 )
                 fallback_url = self._get_stream_url_from_page(user)
-                if fallback_url:
+                if fallback_url and not _is_hls(fallback_url):
                     return [fallback_url]
 
             raise UserLiveError(TikTokError.LIVE_RESTRICTION)
 
         room_data = data.get("data") or {}
         room_status = room_data.get("status")
-        if room_status is not None and str(room_status) != "2":
+        if room_status is not None and str(room_status) not in LIVE_ROOM_STATUSES:
             raise UserLiveError(TikTokError.USER_NOT_CURRENTLY_LIVE)
 
         stream_url = room_data.get("stream_url", {})
@@ -401,16 +449,36 @@ class TikTokAPI:
             return candidates
         level_map = {q["sdk_key"]: q["level"] for q in qualities}
 
-        ordered_sdk_keys = sorted(
-            sdk_data.keys(), key=lambda key: level_map.get(key, -1), reverse=True
-        )
-        for sdk_key in ordered_sdk_keys:
-            entry = sdk_data[sdk_key]
-            stream_main = entry.get("main", {})
-            self._add_live_url_candidate(candidates, stream_main.get("flv"))
-            self._add_live_url_candidate(
-                candidates, stream_main.get("hls") or stream_main.get("m3u8")
+        # Best real quality first: published bitrate, then resolution, then
+        # TikTok's level (some variants publish no bitrate). The audio-only
+        # variant ("ao", `only_audio=1`) always goes last.
+        def rank(key):
+            facts = _sdk_params(sdk_data[key])
+            audio_only = key == "ao" or "only_audio" in str(
+                (sdk_data[key].get("main") or {}).get("flv", "")
             )
+            return (
+                not audio_only,
+                facts["vbitrate"],
+                facts["width"] * facts["height"],
+                level_map.get(key, -1),
+            )
+
+        self.stream_info = {}
+        self._alternates = {}
+        for sdk_key in sorted(sdk_data.keys(), key=rank, reverse=True):
+            entry = sdk_data[sdk_key]
+            main_url = (entry.get("main") or {}).get("flv")
+            backup_url = (entry.get("backup") or {}).get("flv")
+            facts = {"quality": sdk_key, **_sdk_params(entry)}
+            if main_url:
+                self.stream_info[main_url] = {**facts, "cdn": "main"}
+            if backup_url:
+                self.stream_info[backup_url] = {**facts, "cdn": "backup"}
+            if main_url and backup_url and main_url != backup_url:
+                self._alternates[main_url] = backup_url
+                self._alternates[backup_url] = main_url
+            self._add_live_url_candidate(candidates, main_url)
 
         flv_pull_url = stream_url.get("flv_pull_url", {})
         for key in ("FULL_HD1", "HD1", "SD2", "SD1"):
@@ -433,7 +501,9 @@ class TikTokAPI:
 
     def download_live_stream(self, live_url: str):
         """Generator that returns the live stream for a given room_id."""
-        stream = self._http_client_stream.get(live_url, stream=True)
+        stream = self._http_client_stream.get(
+            live_url, stream=True, timeout=STREAM_TIMEOUT
+        )
         try:
             for chunk in stream.iter_content(chunk_size=4096):
                 if chunk:

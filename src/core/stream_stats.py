@@ -84,6 +84,7 @@ class StreamStats:
         self._config_changes = []
         self._ffmpeg_restarts = []
         self._watchdog = []  # core/stream_watchdog.py attempts
+        self._sources = []  # variant read by each connection
 
     def connection(self):
         """A (re)connection to TikTok is about to feed bytes."""
@@ -132,6 +133,11 @@ class StreamStats:
         last = self._streams[kind]["last_ms"]
         return (self._media_ms - (last if last is not None else 0)) / 1000
 
+    def source(self, info):
+        """What TikTok variant this connection reads (quality, resolution,
+        bitrate, codec, main/backup CDN), as published in room info."""
+        self._sources.append({"at": round(self._media_ms / 1000, 1), **(info or {})})
+
     def watchdog(self, event):
         self._watchdog.append(
             {
@@ -173,6 +179,7 @@ class StreamStats:
         result["config_changes"] = self._config_changes
         result["ffmpeg_restarts"] = self._ffmpeg_restarts
         result["watchdog"] = self._watchdog
+        result["sources"] = self._sources
         result["minutes"] = [[m, *v] for m, v in sorted(self._minutes.items())]
         result["minutes_columns"] = [
             "minute",

@@ -461,6 +461,13 @@ class TikTokRecorder:
                             logger.info("Stream connection dropped, reconnecting...")
                             remuxer.new_connection()
                         connections += 1
+                        info = getattr(self.tiktok, "stream_info", {}).get(live_url)
+                        stats.source(info)
+                        if info and connections == 1:
+                            logger.info(
+                                "Stream: {quality} {width}x{height} "
+                                "{vbitrate} bps {codec} ({cdn} CDN)".format(**info)
+                            )
 
                         start_time = time.time()
                         for chunk in self.tiktok.download_live_stream(live_url):
@@ -470,7 +477,16 @@ class TikTokRecorder:
 
                             event = watchdog.check()
                             if event is not None and self._on_watchdog(user, event):
-                                break  # reconnect: the loop above opens a new one
+                                # Reconnect - to the same variant on TikTok's
+                                # other CDN when there is one: the server that
+                                # lost audio/video may keep losing it.
+                                alternate = getattr(
+                                    self.tiktok, "alternate_url", lambda url: None
+                                )(live_url)
+                                if alternate:
+                                    logger.info("Switching to the other CDN.")
+                                    live_url = alternate
+                                break  # the loop above opens a new connection
 
                             elapsed_time = time.time() - start_time
                             if self.duration and elapsed_time >= self.duration:

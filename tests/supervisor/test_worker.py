@@ -231,3 +231,37 @@ def test_worker_stores_participants_for_current_recording(tmp_path, monkeypatch)
     assert [(r["username"], r["start_seconds"], r["end_seconds"]) for r in rows] == [
         ("guest", 12.5, None)
     ]
+
+
+def test_worker_stores_video_duration_not_wall_time(tmp_path, monkeypatch):
+    class _CutRecorder:
+        def __init__(self, config):
+            self.config = config
+
+        def run(self):
+            on_status = self.config.on_status
+            on_status("recording_started", user="creator", file_path="/output/a.ts")
+            on_status(
+                "recording_finished",
+                user="creator",
+                file_path="/output/a.ts",
+                format="ts",
+                media_seconds=1234,
+            )
+
+    monkeypatch.setattr(worker_module, "TikTokRecorder", _CutRecorder)
+    monkeypatch.setattr(worker_module, "generate_thumbnail", lambda path, **kw: None)
+    monkeypatch.setattr(worker_module, "read_cookies", lambda: {})
+
+    db_path = str(tmp_path / "hub.db")
+    init_db(db_path)
+    conn = get_connection(db_path)
+    channel_row = _channel_row(conn)
+    worker = worker_module.Worker(
+        channel_row, db_path, get_connection, tmp_path, ChannelStatusStore()
+    )
+    worker.start()
+    worker.join(timeout=2)
+
+    recordings = recordings_repo.list_filtered(conn, channel_id=channel_row["id"])
+    assert recordings[0]["duration_seconds"] == 1234

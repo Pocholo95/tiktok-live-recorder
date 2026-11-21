@@ -171,6 +171,19 @@ copies of the `*.example` files.
   for a linked co-host, `linked_user_list` / `show_user_list` for
   multi-guest - the latter not yet seen populated in a real capture) and
   turns ids into handles via the `tiktok.com/share/user/<id>` redirect.
+  Times are seconds of VIDEO, not wall clock (fixed 2026-11-20): the
+  recorder hands the tracker `TsRemuxer.media_seconds` (FlvNormalizer's
+  output timeline), because a cut spliced by the reconnect grace leaves
+  no gap in the video and wall-clock times drifted later after every cut.
+  `recording_finished` also carries `media_seconds`, stored as the
+  recording's duration. Old recordings are fixed once at startup by
+  `supervisor/guest_times.py`: TikTok's H.264 SEI carries the capture
+  time (`"ts":<epoch ms>`), so sampling it along a raw .ts shows where
+  the cuts are and how long each took (checked on recording 39: offset
+  steady per segment, 4 cuts, ~6.7 min lost). Converted MP4s lost the SEI
+  and can't be located; they are only counted in the log. Settings keys:
+  `guest_times_video_clock_since` (first boot of the fix - only older
+  recordings are touched) and `guest_times_fixed` (ids done).
   Someone counts as gone only after 2 consecutive missing polls, and a
   return within 120 s continues the same row (TikTok's data flickers).
   Every time the set of linked ids changes, the raw link data is appended
@@ -277,10 +290,6 @@ Agreed but not built yet. Move items out of here when they ship.
     propose them again.
   - Remaining idea (not yet chosen): exact panel times from SEI + names
     accumulated from the rotating `rival_anchor_id` polls.
-- **Guest times drift after a cut** (bug found 2026-11-20).
-  `ParticipantTracker` times are wall clock since tracker start, but the
-  video has no gap when the reconnect grace splices a return, so every
-  guest range after a cut is late by the time spent waiting.
 
 ### Findings from the live UI review (2026-11-12, not yet chosen)
 

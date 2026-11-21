@@ -121,7 +121,9 @@ def _debug_trim(value):
 class ParticipantTracker:
     """
     Polls room info while a recording runs and keeps, per participant, the
-    time ranges (seconds since recording start) they were linked in.
+    time ranges they were linked in, in seconds of `clock()` since start.
+    The recorder passes the recording's video clock (seconds of video
+    written), so the ranges line up with the video even across cuts.
     `on_change(snapshot)` gets the full list whenever it changes:
     [{"username", "start_seconds", "end_seconds" (None while present)}].
     `interval` is seconds, or a callable returning them - re-read before
@@ -236,6 +238,7 @@ class ParticipantTracker:
         self._last_ids = ids
         record = {
             "elapsed_seconds": self._elapsed(),
+            "clock": "video" if self._clock is not time.monotonic else "wall",
             "time_utc": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
             "ids": sorted(ids),
             "resolved": resolved,

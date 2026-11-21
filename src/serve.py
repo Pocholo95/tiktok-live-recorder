@@ -35,6 +35,24 @@ def main():
         daemon=True,
     ).start()
 
+    # Guest times saved before they followed the video clock: fix the old
+    # raw recordings once (reads a few MB per file, in the background).
+    from datetime import datetime, timezone
+
+    from db.database import get_connection
+    from supervisor.guest_times import run_at_startup
+
+    threading.Thread(
+        target=run_at_startup,
+        args=(
+            db_path,
+            get_connection,
+            datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        ),
+        name="guest-times-fix",
+        daemon=True,
+    ).start()
+
     reconcile_interval = int(os.environ.get("HUB_RECONCILE_INTERVAL", "5"))
     supervisor = ChannelSupervisor(
         db_path, output_dir, reconcile_interval=reconcile_interval

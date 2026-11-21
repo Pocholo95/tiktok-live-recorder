@@ -244,9 +244,13 @@ class Worker:
             return None
         return settings_repo.get(conn, discord_webhook.SETTING_KEY)
 
-    def _finish_recording(self, conn, *, file_path, format="ts", **_ignored):
-        duration_seconds = None
-        if self._recording_started_at is not None:
+    def _finish_recording(
+        self, conn, *, file_path, format="ts", media_seconds=None, **_ignored
+    ):
+        # Seconds of video actually written (cuts spliced by the reconnect
+        # grace leave no gap in it); wall-clock time only as a fallback.
+        duration_seconds = media_seconds or None
+        if duration_seconds is None and self._recording_started_at is not None:
             duration_seconds = round(time.time() - self._recording_started_at)
 
         file_size_bytes = None

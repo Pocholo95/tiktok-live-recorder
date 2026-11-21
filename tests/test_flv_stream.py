@@ -90,6 +90,20 @@ def test_reconnect_drops_second_header_and_continues_timeline():
     assert times[-1] == 33 + 40 + 33  # last + splice gap + one frame
 
 
+def test_media_seconds_skip_the_time_lost_in_a_cut():
+    n = FlvNormalizer()
+    assert n.media_seconds == 0
+    frames = b"".join(_video(90_000 + i * 500) for i in range(21))  # 10 s
+    n.feed(FLV_HEADER + _avc_config() + frames)
+    assert n.media_seconds == 10
+    # Minutes later the stream comes back with unrelated timestamps: the
+    # video timeline continues right after the last frame, no gap.
+    n.new_connection()
+    frames = b"".join(_video(500 + i * 500) for i in range(11))  # 5 s more
+    n.feed(FLV_HEADER + _avc_config() + frames)
+    assert 15 <= n.media_seconds < 15.2
+
+
 def test_header_appended_without_new_connection_is_also_spliced():
     # Old raw files were written by blindly appending each connection.
     n = FlvNormalizer()

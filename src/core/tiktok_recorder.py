@@ -44,6 +44,7 @@ class TikTokRecorder:
         self._reconnect_grace_getter = config.reconnect_grace_getter
         self._last_live_end = None
         self._tracker = None
+        self._remuxer = None  # the current recording's, for its video clock
 
     @property
     def automatic_interval(self):
@@ -269,6 +270,7 @@ class TikTokRecorder:
         output = self._build_output_path(user)
         self._on_status("recording_started", user=user, file_path=output)
 
+        self._remuxer = None
         tracker = self._start_participant_tracker(user, room_id, output)
         self._tracker = tracker
         try:
@@ -280,7 +282,21 @@ class TikTokRecorder:
                 tracker.stop()
             self._tracker = None
             self._last_live_end = time.time()
-        self._on_status("recording_finished", user=user, file_path=output, format="ts")
+        self._on_status(
+            "recording_finished",
+            user=user,
+            file_path=output,
+            format="ts",
+            media_seconds=round(self._media_seconds()),
+        )
+
+    def _media_seconds(self):
+        """Seconds of video written to the current recording so far. Guest
+        times use this, not the wall clock: a cut that the reconnect grace
+        splices leaves no gap in the video, so wall-clock times would land
+        later and later after every cut."""
+        remuxer = self._remuxer
+        return remuxer.media_seconds if remuxer is not None else 0.0
 
     def _start_participant_tracker(self, user, room_id, output):
         """Best-effort: any failure only means no guest names for this live."""
@@ -294,6 +310,7 @@ class TikTokRecorder:
                     "participants", user=user, participants=snapshot
                 ),
                 debug_path=str(Path(output).with_suffix(".participants.jsonl")),
+                clock=self._media_seconds,
                 on_access_denied=lambda: self._on_status(
                     "session_problem",
                     user=user,
@@ -378,6 +395,7 @@ class TikTokRecorder:
             # to MPEG-TS on the fly - see core/flv_stream.py. No transcode
             # happens on this machine; the MP4 is made offline on a GPU.
             remuxer = TsRemuxer(output, ffmpeg_path=self.ffmpeg_path)
+            self._remuxer = remuxer
             try:
                 stop_recording = False
                 stream_ended = False

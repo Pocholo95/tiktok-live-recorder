@@ -157,6 +157,10 @@ class _FakeRemuxer:
     def write(self, chunk):
         self.chunks.append(chunk)
 
+    @property
+    def media_seconds(self):
+        return 2.0 * len(self.chunks)  # pretend each chunk is 2 s of video
+
     def close(self):
         self.closed = True
 
@@ -250,6 +254,8 @@ class _FakeTracker:
 
     def __init__(self, api, room_id, on_change, **kwargs):
         self.on_change = on_change
+        self.clock = kwargs.get("clock")
+        self.clock_at_start = self.clock() if self.clock else None
         self.started = self.stopped = False
         _FakeTracker.instances.append(self)
 
@@ -261,6 +267,7 @@ class _FakeTracker:
 
     def stop(self):
         self.stopped = True
+        self.clock_at_stop = self.clock() if self.clock else None
         self.on_change([{"username": "guest", "start_seconds": 1, "end_seconds": 2}])
 
 
@@ -478,3 +485,29 @@ def test_checks_every_minute_for_a_while_after_a_live(monkeypatch):
     assert recorder.automatic_interval == 1
     now[0] += 2 * 60
     assert recorder.automatic_interval == 10
+
+
+def test_guest_times_follow_the_video_clock_across_a_cut(tmp_path, monkeypatch):
+    """Guest ranges use seconds of video written, so the minutes spent
+    waiting for the creator to come back don't push later guests out of
+    sync with the video."""
+    _FakeRemuxer.instances.clear()
+    _FakeTracker.instances.clear()
+    monkeypatch.setattr("core.tiktok_recorder.TsRemuxer", _FakeRemuxer)
+    monkeypatch.setattr("core.tiktok_recorder.ParticipantTracker", _FakeTracker)
+    clock = [1000.0]
+    events = []
+    recorder = _grace_recorder(tmp_path, monkeypatch, clock, grace=300, events=events)
+    finished = {}
+    recorder._on_status = lambda phase, **data: (
+        events.append(phase),
+        finished.update(data) if phase == "recording_finished" else None,
+    )
+    recorder.tiktok = _RestartingAPI(clock, comes_back_after=90)
+
+    recorder.start_recording("creator", "1")
+
+    tracker = _FakeTracker.instances[-1]
+    assert tracker.clock_at_start == 0
+    assert tracker.clock_at_stop == 4.0  # 2 chunks of video, not 90+ s of wall time
+    assert finished["media_seconds"] == 4

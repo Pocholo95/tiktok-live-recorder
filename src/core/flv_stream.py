@@ -184,6 +184,13 @@ class FlvNormalizer:
         tag[7] = (out_ts >> 24) & 0xFF
         return bytes(tag)
 
+    @property
+    def media_seconds(self):
+        """Position in the output timeline (seconds of video written so far).
+        Unlike wall-clock time it doesn't advance during a cut, because the
+        next connection is spliced right after the last frame."""
+        return (self._last_out_ts or 0) / 1000
+
     def restart_prefix(self):
         """
         Bytes that make a valid FLV stream start for a fresh consumer joining
@@ -256,6 +263,10 @@ class TsRemuxer:
 
     def new_connection(self):
         self._normalizer.new_connection()
+
+    @property
+    def media_seconds(self):
+        return self._normalizer.media_seconds
 
     def write(self, chunk):
         data = self._normalizer.feed(chunk)

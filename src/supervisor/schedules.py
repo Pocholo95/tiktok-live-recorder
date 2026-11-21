@@ -16,9 +16,10 @@ _lock = threading.Lock()
 
 
 def _spans(conn, username, now):
+    # live_history keeps lives whose recording was deleted (db/schema.sql).
     rows = conn.execute(
         """
-        SELECT started_at, ended_at, duration_seconds, status FROM recordings
+        SELECT started_at, ended_at, duration_seconds, status FROM live_history
         WHERE username = ? AND status IN ('completed', 'recording')
         """,
         (username,),

@@ -45,6 +45,15 @@ def _migrate(conn):
         for name, definition in columns:
             if name not in existing:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+    # Recordings from before live_history existed (idempotent).
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO live_history
+            (recording_id, username, started_at, ended_at, duration_seconds, status)
+        SELECT id, username, started_at, ended_at, duration_seconds, status
+        FROM recordings
+        """
+    )
 
 
 def get_connection(db_path):

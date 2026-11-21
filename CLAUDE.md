@@ -382,6 +382,14 @@ copies of the `*.example` files.
     ⚡ on the dashboard): usual hours = half the channel interval (min
     1 min), other hours = double (max 15 min, never faster than set),
     configured interval unchanged while learning.
+  - Lives come from `live_history`, NOT `recordings` (fixed 2026-11-21:
+    deleting recordings the user didn't need made "aprendiendo horarios"
+    go back). SQLite triggers copy every INSERT/UPDATE of `recordings`
+    into it; there's no DELETE trigger, so deleting a recording keeps the
+    live. `_migrate` backfills it from `recordings` on every boot, and
+    serve.py `backups.recover_live_history` adds completed lives found in
+    the daily hub.db backups (newest first) - lives deleted before the fix
+    come back if a backup still has them.
   - Learned after 5 lives over 7 days. Probability per hour of the week =
     weighted share of days live at that hour (half-life 30 days, ±1 h at
     half credit so checks speed up just before the usual start). "Usual"

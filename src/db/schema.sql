@@ -76,3 +76,37 @@ CREATE TABLE IF NOT EXISTS recording_participants (
 
 CREATE INDEX IF NOT EXISTS idx_recording_participants_recording
     ON recording_participants(recording_id);
+
+-- Every live ever recorded, kept when its recording is deleted: learned
+-- schedules (supervisor/schedules.py) read this, not `recordings`, so
+-- deleting recordings you don't need doesn't make the hub forget that the
+-- creator was live (user report 2026-11-21: "aprendiendo horarios" went
+-- back after a cleanup). Mirrored from `recordings` by the triggers below
+-- (no DELETE trigger, on purpose); backfilled at startup.
+CREATE TABLE IF NOT EXISTS live_history (
+    recording_id INTEGER PRIMARY KEY,
+    username TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    ended_at TEXT,
+    duration_seconds INTEGER,
+    status TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_live_history_username ON live_history(username);
+
+CREATE TRIGGER IF NOT EXISTS live_history_insert AFTER INSERT ON recordings
+BEGIN
+    INSERT OR REPLACE INTO live_history
+        (recording_id, username, started_at, ended_at, duration_seconds, status)
+    VALUES (NEW.id, NEW.username, NEW.started_at, NEW.ended_at,
+            NEW.duration_seconds, NEW.status);
+END;
+
+CREATE TRIGGER IF NOT EXISTS live_history_update
+AFTER UPDATE OF username, started_at, ended_at, duration_seconds, status ON recordings
+BEGIN
+    INSERT OR REPLACE INTO live_history
+        (recording_id, username, started_at, ended_at, duration_seconds, status)
+    VALUES (NEW.id, NEW.username, NEW.started_at, NEW.ended_at,
+            NEW.duration_seconds, NEW.status);
+END;

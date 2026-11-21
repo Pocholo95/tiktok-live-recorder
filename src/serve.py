@@ -97,6 +97,18 @@ def main():
         lambda: TikTokAPI(proxy=None, cookies=read_cookies()),
     ).start()
 
+    # Lives whose recording was deleted before live_history existed are
+    # still in the daily backups: put them back into the schedule history.
+    from supervisor import backups as _backups
+
+    _conn = get_connection(db_path)
+    try:
+        _backups.recover_live_history(_conn, _backups.backup_dir(output_dir))
+    except Exception as e:
+        print(f"Live history recovery failed: {e}")
+    finally:
+        _conn.close()
+
     # Hourly: delete expired kept originals, daily hub.db backup.
     from supervisor.housekeeping import Housekeeping
 

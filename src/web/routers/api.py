@@ -61,10 +61,10 @@ def convert_args(
 ):
     """
     ffmpeg arguments with `{input}` / `{output}` placeholders, for the
-    script to substitute its local paths into. With `recording_id`, they
-    also write that recording's seek-bar thumbnails into a `{storyboard}`
-    folder (the script uploads it after the MP4; `storyboard.interval`
-    goes along with it).
+    script to substitute its local paths into. With `recording_id`,
+    `storyboard` also carries a second command that makes that recording's
+    seek-bar thumbnails from the finished MP4 (`{output}`) into a
+    `{storyboard}` folder; the script uploads them with `interval`.
     """
     options = convert.normalize(encoder, size, quality)
     storyboard = None
@@ -72,14 +72,20 @@ def convert_args(
         row = recordings_repo.get(db, recording_id)
         if row is None:
             raise HTTPException(status_code=404, detail="Recording not found")
+        interval = storyboards.interval_for(row["duration_seconds"] or 3600)
         storyboard = {
-            "pattern": "{storyboard}/sheet_%03d.jpg",
-            "interval": storyboards.interval_for(row["duration_seconds"] or 3600),
+            "interval": interval,
+            "args": [
+                "-hide_banner",
+                *storyboards.ffmpeg_args(
+                    "{output}", "{storyboard}/sheet_%03d.jpg", interval
+                ),
+            ],
         }
     return {
         "options": options,
-        "args": convert.ffmpeg_args("{input}", "{output}", options, storyboard),
-        "storyboard": {"interval": storyboard["interval"]} if storyboard else None,
+        "args": convert.ffmpeg_args("{input}", "{output}", options),
+        "storyboard": storyboard,
     }
 
 

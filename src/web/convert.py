@@ -7,13 +7,11 @@ two can never drift apart.
 Keep the `scale+pad+fps` video filter and `aresample=async=1`: they are
 what fix TikTok's mid-stream resolution changes and the splice gaps.
 
-The auto-convert script also asks for the seek-bar thumbnails
-(storyboard, see supervisor/storyboards.py) as a second output of the same
-ffmpeg run: the frames are already decoded and scaled, so it costs seconds
-on the PC instead of the hub re-reading the whole MP4 from its disk.
+The seek-bar thumbnails are NOT made here: the script makes them from the
+finished MP4 (supervisor/storyboards.ffmpeg_args). Made from the raw input
+they follow its timestamps, which drift from the MP4's when TikTok's audio
+jumps or a filter reinit drops a half-filled sheet.
 """
-
-from supervisor import storyboards
 
 ENCODERS = {
     "h264_nvenc": "NVIDIA H.264 (compatible con todo)",
@@ -45,12 +43,8 @@ def normalize(encoder=None, size=None, quality=None):
     }
 
 
-def ffmpeg_args(input_path, output_path, options, storyboard=None):
-    """
-    Argument list (without the `ffmpeg` executable itself). `storyboard`,
-    if given, is {"pattern": "<dir>/sheet_%03d.jpg", "interval": seconds}:
-    the storyboard sheets are written as a second output.
-    """
+def ffmpeg_args(input_path, output_path, options):
+    """Argument list (without the `ffmpeg` executable itself)."""
     o = normalize(**options)
     width, height = o["size"].split("x")
     value = _QUALITY_VALUE[o["encoder"]][o["quality"]]
@@ -65,28 +59,15 @@ def ffmpeg_args(input_path, output_path, options, storyboard=None):
         f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
         f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p"
     )
-    encode = [
+    return [
+        "-hide_banner", "-fflags", "+genpts+discardcorrupt", "-i", input_path,
+        "-vf", video_filter,
         "-af", "aresample=async=1:first_pts=0",
         *video,
         "-g", "60",
         "-c:a", "aac", "-b:a", "128k", "-ac", "2",
         "-movflags", "+faststart",
         output_path,
-    ]  # fmt: skip
-    head = ["-hide_banner", "-fflags", "+genpts+discardcorrupt", "-i", input_path]
-    if not storyboard:
-        return [*head, "-vf", video_filter, *encode]
-    tiles = (
-        f"fps=1/{int(storyboard['interval'])},"
-        f"scale=-2:{storyboards.TILE_HEIGHT},"
-        f"tile={storyboards.COLS}x{storyboards.ROWS}"
-    )
-    return [
-        *head,
-        "-filter_complex", f"[0:v]{video_filter},split=2[v][s];[s]{tiles}[sb]",
-        "-map", "[v]", "-map", "0:a?",
-        *encode,
-        "-map", "[sb]", "-q:v", "6", storyboard["pattern"],
     ]  # fmt: skip
 
 

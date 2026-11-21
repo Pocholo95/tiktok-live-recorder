@@ -169,14 +169,21 @@ copies of the `*.example` files.
   tiles 160 px high, one every `max(2, ceil(duration/1000))` s, plus
   `meta.json`). Made on the user's PC while converting (user decision
   2026-11-20, to spare the hub's NAS HDD from re-reading every MP4): the
-  script asks `/api/convert/args?recording_id=N`, which adds a second
-  output to the same ffmpeg run (`-filter_complex ... split=2[v][s]` ->
-  `{storyboard}/sheet_%03d.jpg`, interval from the recording's duration),
-  then after the MP4 upload zips the sheets and sends
+  script asks `/api/convert/args?recording_id=N`, whose `storyboard.args`
+  is a second, separate ffmpeg command run on the FINISHED MP4
+  (`storyboards.ffmpeg_args`, keyframes only, < 1 s for 20 min of AV1;
+  interval from the recording's duration), then after the MP4 upload zips
+  the sheets and sends
   `PUT /recordings/{id}/storyboard?interval=N` (`install_uploaded`
   validates names, JPEG magic, sizes, consecutive sheets; failure is only
-  a warning in the script). The manual command (no recording_id) stays a
-  single output. Fallback: `StoryboardWorker` thread (serve.py,
+  a warning in the script). They were first a second output of the
+  conversion itself; that drifted minutes off on recording 42 (fixed
+  2026-11-20): TikTok's audio jumped 21.5 s ahead at ~696 s, ffmpeg padded
+  the MP4 (+33 s vs the raw) and a filter reinit dropped a half-filled
+  sheet, so tiles followed the raw's timeline, not the MP4's.
+  `-reinit_filter 0` fixes the tiles but breaks real resolution changes
+  (the scale/pad stop adapting) - don't use it. Thumbnails must always be
+  made from the MP4. Fallback: `StoryboardWorker` thread (serve.py,
   `app.state.storyboards`) builds missing ones for MP4s older than
   `UPLOAD_GRACE_SECONDS` (15 min, so the PC's upload wins), newest first,
   keyframes only, `nice`, rescans every 10 min. Served by `/media/{id}/storyboard`
@@ -332,6 +339,15 @@ Agreed but not built yet. Move items out of here when they ship.
     durations differ by more than `max(10 s, 2 %)`.
   - [ ] Browser: if the dropped file isn't named `<raw stem>.mp4`, ask for
     confirmation before uploading (warning, not a block).
+- **A/V timestamp jump in raw recordings** (found 2026-11-20 on
+  recording 42, not yet investigated): at ~696 s the raw's audio
+  timestamps jump 21.5 s ahead of the video and then wobble backwards
+  ~0.13 s per packet; the converted MP4 gets ~99 s of near-silence
+  (695-794 s) and ends 33 s longer than the raw. So the MP4 timeline can
+  differ from the video clock that guest times use. Check whether it
+  comes from TikTok or from `FlvNormalizer`'s discontinuity handling
+  (a lone audio jump > `_MAX_FORWARD_MS` resets the shared offset); the
+  new `.stats.json` will show the next one.
 - **Conversion checks** (discussed 2026-11-20, after real stats data):
   on upload, compare audio vs video stream duration and the raw's
   duration; measure long silences on the PC during conversion

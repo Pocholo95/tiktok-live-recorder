@@ -160,14 +160,17 @@ def test_api_convert_args_with_storyboard_for_a_recording(client, app):
 
     data = client.get(f"/api/convert/args?recording_id={rid}").json()
 
-    assert data["storyboard"] == {"interval": 10}
-    args = data["args"]
-    assert "-filter_complex" in args and "-vf" not in args
-    graph = args[args.index("-filter_complex") + 1]
-    assert "split=2[v][s]" in graph and "fps=1/10" in graph and "tile=10x10" in graph
-    assert args[-1] == "{storyboard}/sheet_%03d.jpg"
-    assert "{output}" in args
-    # Without a recording (manual command): plain single output, as before.
+    # The conversion itself is a single output...
+    assert "-vf" in data["args"] and "-filter_complex" not in data["args"]
+    assert not any("{storyboard}" in arg for arg in data["args"])
+    # ...and the thumbnails come from the finished MP4, keyframes only.
+    board = data["storyboard"]
+    assert board["interval"] == 10
+    assert board["args"][board["args"].index("-i") + 1] == "{output}"
+    assert "nokey" in board["args"]
+    assert "fps=1/10,scale=-2:160,tile=10x10" in board["args"]
+    assert board["args"][-1] == "{storyboard}/sheet_%03d.jpg"
+    # Without a recording (manual command): no thumbnails.
     plain = client.get("/api/convert/args").json()
     assert plain["storyboard"] is None and "-vf" in plain["args"]
     assert client.get("/api/convert/args?recording_id=999").status_code == 404

@@ -6,9 +6,13 @@ sheets of small frames (one every `interval` seconds, COLS x ROWS per
 sheet) plus `meta.json` describing the grid. The library player reads it
 to show a frame while hovering/dragging the seek bar.
 
-Normally the user's PC makes them while converting (a second output of
-the same ffmpeg run, see web/convert.py) and uploads them as a zip right
-after the MP4 (`install_uploaded`). The background worker below is the
+Normally the user's PC makes them right after converting, from the MP4 it
+just made (`ffmpeg_args`, sent by /api/convert/args), and uploads them as
+a zip after the MP4 (`install_uploaded`). They used to be a second output
+of the conversion itself, but that follows the RAW file's timestamps: when
+TikTok's audio jumps (seen on recording 42, 2026-11-20) the MP4 gets
+padded, a filter reinit drops a half-filled sheet, and the thumbnails
+drifted minutes away from the video. The background worker below is the
 fallback for MP4s that arrive without them (uploaded by hand, older ones):
 built one video at a time, at low priority: only
 keyframes are decoded (`-skip_frame nokey`, our MP4s have one every 2 s),
@@ -85,6 +89,22 @@ def _probe_size(path, ffprobe_path):
     return stream.get("width"), stream.get("height")
 
 
+def ffmpeg_args(input_path, pattern, interval):
+    """
+    ffmpeg arguments (without the executable) that write the storyboard
+    sheets of a finished MP4 to `pattern` (".../sheet_%03d.jpg"). Only
+    keyframes are decoded (one every 2 s in our MP4s). Used by the hub's
+    worker and, via /api/convert/args, by the converting PC - always on
+    the MP4 itself, so the thumbnails follow the video's own timeline.
+    """
+    return [
+        "-skip_frame", "nokey", "-i", str(input_path),
+        "-an", "-sn",
+        "-vf", f"fps=1/{interval},scale=-2:{TILE_HEIGHT},tile={COLS}x{ROWS}",
+        "-q:v", "6", str(pattern),
+    ]  # fmt: skip
+
+
 def generate(video_path, duration, ffmpeg_path="ffmpeg", ffprobe_path="ffprobe"):
     """Builds the storyboard for one MP4. Returns its meta dict, or None."""
     video_path = Path(video_path)
@@ -98,10 +118,8 @@ def generate(video_path, duration, ffmpeg_path="ffmpeg", ffprobe_path="ffprobe")
     interval = interval_for(duration)
     cmd = [
         ffmpeg_path, "-hide_banner", "-loglevel", "error", "-nostdin",
-        "-threads", "2", "-skip_frame", "nokey", "-i", str(video_path),
-        "-an", "-sn",
-        "-vf", f"fps=1/{interval},scale=-2:{TILE_HEIGHT},tile={COLS}x{ROWS}",
-        "-q:v", "6", str(work / "sheet_%03d.jpg"),
+        "-threads", "2",
+        *ffmpeg_args(video_path, work / "sheet_%03d.jpg", interval),
     ]  # fmt: skip
     if shutil.which("nice"):
         cmd = ["nice", "-n", "15", *cmd]

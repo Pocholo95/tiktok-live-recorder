@@ -150,15 +150,30 @@ function Invoke-HubConvert {
                 Log "  convirtiendo..."
                 $convert = Invoke-RestMethod -Uri "$hubUrl/api/convert/args?encoder=$Encoder&size=$Size&quality=$Quality&recording_id=$recId"
                 Remove-Item -Recurse -Force $sbDir, $sbZip -ErrorAction SilentlyContinue
-                if ($convert.storyboard) { New-Item -ItemType Directory -Force -Path $sbDir | Out-Null }
                 $argsForThis = $convert.args | ForEach-Object {
-                    $_.Replace("{input}", $raw).Replace("{output}", $tmp).Replace("{storyboard}", $sbDir)
+                    $_.Replace("{input}", $raw).Replace("{output}", $tmp)
                 }
                 & ffmpeg -y -loglevel error -stats @argsForThis
                 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $tmp)) {
                     throw "ffmpeg fallo (codigo $LASTEXITCODE)"
                 }
                 Move-Item -Force $tmp $mp4
+
+                # 2b. Seek-bar thumbnails, from the finished MP4 so they
+                # follow its own timeline (keyframes only: seconds). Optional.
+                $sbMade = $false
+                if ($convert.storyboard) {
+                    New-Item -ItemType Directory -Force -Path $sbDir | Out-Null
+                    $sbArgs = $convert.storyboard.args | ForEach-Object {
+                        $_.Replace("{output}", $mp4).Replace("{storyboard}", $sbDir)
+                    }
+                    Log "  miniaturas..."
+                    & ffmpeg -y -loglevel error @sbArgs
+                    $sbMade = ($LASTEXITCODE -eq 0)
+                    if (-not $sbMade) {
+                        Log "  AVISO: no se pudieron hacer las miniaturas; el hub las va a generar."
+                    }
+                }
 
                 # 3. Upload; the hub checks it before replacing the raw.
                 Log "  subiendo..."
@@ -180,7 +195,7 @@ function Invoke-HubConvert {
 
                 # 3b. Thumbnails: optional, the hub builds its own if these
                 # don't arrive, so a problem here is only a warning.
-                if ($convert.storyboard -and (Get-ChildItem $sbDir -Filter "sheet_*.jpg" -ErrorAction SilentlyContinue)) {
+                if ($sbMade -and (Get-ChildItem $sbDir -Filter "sheet_*.jpg" -ErrorAction SilentlyContinue)) {
                     try {
                         Compress-Archive -Path (Join-Path $sbDir "sheet_*.jpg") -DestinationPath $sbZip -Force
                         $sbStatus = & curl.exe -sS -T $sbZip -H "Content-Type: application/zip" -o $response -w "%{http_code}" "$hubUrl/recordings/$recId/storyboard?interval=$($convert.storyboard.interval)"

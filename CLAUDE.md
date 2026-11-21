@@ -333,12 +333,16 @@ copies of the `*.example` files.
   the real cause, `utils/session_log.py` writes
   `OUTPUT_DIR/session-events.jsonl` (download: Settings -> Cookies):
   cookie NAMES TikTok sets (never values), every 4003110 (TikTok gives no
-  reason: `"prompts": ""`), `session_saved`, `cookies_reloaded`. Next
-  step, decided with the user: read that after a few days; if TikTok
-  rotates session cookies, persist them; if it still dies, a tiny browser
-  extension that pushes the account's tiktok.com cookies to the hub.
-  Logging in with user/password is a no-go (captcha, account risk).
-  Without a working session, restricted lives show "No se puede grabar".
+  reason: `"prompts": ""`), `session_saved`, `cookies_reloaded`.
+  RESOLVED the same day: the session never expired. Its cookie expires
+  2027-05-03 (~180-day lifetime) and the user confirmed the value they
+  re-pasted daily was always the same one. So the daily "renew it"
+  feeling came from the reload bug, plus 4003110 for lives TikTok won't
+  show this account even with a valid session (region, or 18+ without an
+  age-verified account). No auto-renewal needed (browser-extension idea
+  dropped; user/password login is a no-go anyway). Pending: the
+  "renová la cookie / probablemente venció" wording of the blocked alert
+  and the Settings session notice is misleading - see Backlog.
 - `src/cookies.json` is marked `git update-index --skip-worktree` on the
   user's machine because it holds their TikTok session. Never commit it.
 - Live notices go to a Discord webhook: `notify/discord_webhook.py`. The
@@ -436,6 +440,12 @@ Agreed but not built yet. Move items out of here when they ship.
   comes from TikTok or from `FlvNormalizer`'s discontinuity handling
   (a lone audio jump > `_MAX_FORWARD_MS` resets the shared offset); the
   new `.stats.json` will show the next one.
+- **Blocked-live wording** (2026-11-21): the session lasts months, so a
+  4003110 with a session set is usually NOT an expired session. The
+  `blocked` alert/status ("renová la cookie", "probablemente venció") and
+  the Settings "TikTok rechazó la sesión" notice should say the live is
+  restricted for this account (region / 18+) and only suggest renewing as
+  a last resort. Check the session log first to see which lives it is.
 - **Conversion checks** (discussed 2026-11-20, after real stats data):
   on upload, compare audio vs video stream duration and the raw's
   duration; measure long silences on the PC during conversion

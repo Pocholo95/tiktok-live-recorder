@@ -459,11 +459,11 @@ def test_dashboard_shows_live_recording_info(client, app, tmp_path):
 
     statuses[channel_id] = {
         "phase": "blocked",
-        "detail": "En vivo, pero TikTok rechaza la sesión: renová la cookie",
+        "detail": "En vivo, pero restringido para la cuenta del hub (región o 18+)",
         "flags": {},
     }
     text = client.get("/partials/channels").text
-    assert "No se puede grabar" in text and "renová la cookie" in text
+    assert "No se puede grabar" in text and "región o 18+" in text
 
 
 def test_settings_problem_alerts_toggle_and_session_health(client, app):
@@ -482,7 +482,9 @@ def test_settings_problem_alerts_toggle_and_session_health(client, app):
     original = utils_module.read_cookies
     utils_module.read_cookies = lambda: {"sessionid_ss": "abcdefgh"}
     try:
-        assert "TikTok rechazó la sesión" in client.get("/settings").text
+        text = client.get("/settings").text
+        assert "TikTok no mostró un live con esta cuenta" in text
+        assert "venció" not in text
     finally:
         utils_module.read_cookies = original
 

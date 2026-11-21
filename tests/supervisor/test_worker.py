@@ -322,9 +322,10 @@ def test_worker_shows_blocked_lives_and_alerts(tmp_path, monkeypatch):
     worker._on_status("blocked", user="creator", reason="restricted", has_session=True)
 
     status = store.get(row["id"])
-    assert status["phase"] == "blocked" and "renová la cookie" in status["detail"]
+    assert status["phase"] == "blocked" and "región o 18+" in status["detail"]
     assert sent[0][0].endswith("@creator está en vivo pero no se puede grabar")
-    assert "venció" in sent[0][1]
+    assert "renovala solo si pasa con todos los lives" in sent[0][1]
+    assert "venció" not in sent[0][1]
     assert alerts.last_session_problem(conn)[1] == "creator"  # shown in Settings
 
     worker._on_status("blocked", user="creator", reason="restricted", has_session=True)

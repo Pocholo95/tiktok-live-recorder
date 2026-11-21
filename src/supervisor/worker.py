@@ -271,7 +271,7 @@ class Worker:
             self.channel_id,
             phase="blocked",
             detail=(
-                "En vivo, pero TikTok rechaza la sesión: renová la cookie"
+                "En vivo, pero restringido para la cuenta del hub (región o 18+)"
                 if has_session
                 else "En vivo, pero TikTok pide una sesión: configurá la cookie"
             ),
@@ -283,15 +283,17 @@ class Worker:
             f"live_blocked:{self.channel_id}",
             f"@{user} está en vivo pero no se puede grabar",
             (
-                "TikTok no deja ver este live sin una sesión válida (restricción "
-                "de edad o de región) y "
-                + (
-                    "la configurada no sirve: probablemente venció. "
-                    if has_session
-                    else "no hay ninguna configurada. "
-                )
-                + "Pegá un `sessionid_ss` nuevo en Ajustes → Cookies: el hub lo "
-                "vuelve a intentar en cada revisión y graba apenas funcione."
+                "TikTok no deja ver este live con la cuenta del hub. Casi "
+                "siempre es un live restringido por región o para mayores de "
+                "18: revisá que esa cuenta tenga cargada una fecha de nacimiento "
+                "de adulto. La sesión casi nunca es la causa (dura meses); "
+                "renovala solo si pasa con todos los lives. El hub lo reintenta "
+                "en cada revisión y graba apenas TikTok lo deje."
+                if has_session
+                else "TikTok no deja ver este live sin una sesión (restricción de "
+                "edad o de región) y no hay ninguna configurada. Pegá el "
+                "`sessionid_ss` de una cuenta de TikTok en Ajustes → Cookies: el "
+                "hub lo reintenta en cada revisión y graba apenas funcione."
             ),
             throttle_seconds=2 * 3600,
         )
@@ -303,11 +305,12 @@ class Worker:
             alerts.send(
                 conn,
                 "session_rejected",
-                "Tu sesión de TikTok no está funcionando",
-                f"TikTok no dejó leer el live de @{user} (tiene restricción de "
-                "edad) aunque hay una sesión configurada: probablemente venció. "
-                "Se sigue grabando, pero sin los nombres de los invitados. "
-                "Actualizá `sessionid_ss` en Ajustes → Cookies.",
+                f"Live de @{user} restringido para la cuenta del hub",
+                f"TikTok no dejó leer la información del live de @{user} con la "
+                "cuenta del hub (restricción de región o 18+). Se sigue "
+                "grabando, pero sus invitados pueden quedar sin nombre. La sesión "
+                "casi nunca es la causa (dura meses): renovala solo si pasa con "
+                "todos los lives.",
                 throttle_seconds=12 * 3600,
             )
         else:

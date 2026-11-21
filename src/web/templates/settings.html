@@ -42,11 +42,12 @@
 {% if session_status %}
 <p class="session-health {{ 'is-bad' if session_problem else 'is-ok' }}">
   {% if session_problem %}
-    ⚠️ TikTok rechazó la sesión <span title="{{ session_problem.when }} UTC">{{ session_problem.when | ago }}</span>
-    (live de @{{ session_problem.username }}): probablemente venció. Pegá una nueva arriba.
+    ⚠️ TikTok no mostró un live con esta cuenta <span title="{{ session_problem.when }} UTC">{{ session_problem.when | ago }}</span>
+    (@{{ session_problem.username }}). Casi siempre es un live restringido por región
+    o para mayores de 18, no la sesión (dura meses): renovala solo si pasa con todos los lives.
   {% else %}
-    ✓ Sin problemas detectados con la sesión. Se comprueba en la práctica: si TikTok
-    la rechaza en un live con restricción de edad, aparece acá y te llega un aviso.
+    ✓ Sin problemas detectados con la sesión. Si TikTok no muestra un live con esta
+    cuenta (región o 18+), aparece acá y te llega un aviso.
   {% endif %}
 </p>
 {% endif %}
@@ -73,8 +74,8 @@
   Mientras graba, el hub revisa cada tanto quién está conectado con el creador
   (co-host o invitados) para anotar sus @. Más corto = horarios más precisos,
   pero más consultas a TikTok. Los lives con restricción de edad necesitan la
-  cookie <strong>sessionid_ss</strong> de arriba; si falta o venció, se graba igual
-  pero sin nombres.
+  cookie <strong>sessionid_ss</strong> de arriba; si falta o el live está restringido
+  para esa cuenta, se graba igual pero sin nombres.
 </p>
 <form method="post" action="/settings/participants" class="settings-form">
   <label>

@@ -174,7 +174,7 @@ def test_worker_session_problem_alerts(tmp_path, monkeypatch):
 
     worker._on_status("session_problem", user="creator", has_session=True)
     worker._on_status("session_problem", user="creator", has_session=True)
-    assert sent == ["⚠️ Tu sesión de TikTok no está funcionando"]
+    assert sent == ["⚠️ Live de @creator restringido para la cuenta del hub"]
     assert alerts.last_session_problem(conn)[1] == "creator"
 
     worker._on_status("session_problem", user="creator", has_session=False)

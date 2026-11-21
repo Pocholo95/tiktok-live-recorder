@@ -340,9 +340,11 @@ copies of the `*.example` files.
   feeling came from the reload bug, plus 4003110 for lives TikTok won't
   show this account even with a valid session (region, or 18+ without an
   age-verified account). No auto-renewal needed (browser-extension idea
-  dropped; user/password login is a no-go anyway). Pending: the
-  "renová la cookie / probablemente venció" wording of the blocked alert
-  and the Settings session notice is misleading - see Backlog.
+  dropped; user/password login is a no-go anyway). The blocked status,
+  its alert, the in-recording session alert and the Settings notice now
+  say the live is restricted for the hub's account (region / 18+: check
+  the account has an adult birth date) and to renew the session only if
+  it happens with every live.
 - `src/cookies.json` is marked `git update-index --skip-worktree` on the
   user's machine because it holds their TikTok session. Never commit it.
 - Live notices go to a Discord webhook: `notify/discord_webhook.py`. The
@@ -403,7 +405,8 @@ copies of the `*.example` files.
     expires almost daily) or "waf" (TikTok's block page). The worker shows
     why and sends a Discord alert at once (`live_blocked:<channel>` /
     `ip_blocked`, 2 h throttle); restricted + a configured session also
-    records the Settings "session rejected" notice. Before this, such lives
+    records the Settings notice ("TikTok no mostró un live con esta
+    cuenta" - region / 18+, not an expired session). Before this, such lives
     showed "Offline" and were never recorded, with no alert.
   - Crash loops: `ChannelSupervisor` restarts a dead worker after
     `RESTART_DELAYS` (0, 30 s, 2, 5, 15 min per consecutive death; a run
@@ -440,12 +443,6 @@ Agreed but not built yet. Move items out of here when they ship.
   comes from TikTok or from `FlvNormalizer`'s discontinuity handling
   (a lone audio jump > `_MAX_FORWARD_MS` resets the shared offset); the
   new `.stats.json` will show the next one.
-- **Blocked-live wording** (2026-11-21): the session lasts months, so a
-  4003110 with a session set is usually NOT an expired session. The
-  `blocked` alert/status ("renová la cookie", "probablemente venció") and
-  the Settings "TikTok rechazó la sesión" notice should say the live is
-  restricted for this account (region / 18+) and only suggest renewing as
-  a last resort. Check the session log first to see which lives it is.
 - **Conversion checks** (discussed 2026-11-20, after real stats data):
   on upload, compare audio vs video stream duration and the raw's
   duration; measure long silences on the PC during conversion

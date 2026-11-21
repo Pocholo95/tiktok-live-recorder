@@ -110,6 +110,13 @@ copies of the `*.example` files.
   without scrolling. On phones the player comes before the list.
   `partials/guests_panel.html` is shared by the player side column and
   the raw/recording views.
+- Player stalls (diagnosed 2026-11-20 on the user's hub): a `<video>`
+  removed by an htmx swap kept downloading until GC, and after ~4
+  recording switches the new player hung until F5. library.html
+  `releaseVideos` empties the source + `load()` on `htmx:beforeSwap` and
+  `pagehide`. Server side was fine (Range 206, ~110 MB/s, faststart, GOP
+  2 s, h2 at the proxy); seeking in a 2.6 h MP4 still takes ~1-1.5 s in
+  the browser.
 - Library: `/library` renders `library.html`, `partials/library_content.html`
   (htmx filter/tab changes) or `partials/library_main.html` (htmx
   recording click, `HX-Target: library-main`) so the sidebar keeps its

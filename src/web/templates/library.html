@@ -94,6 +94,24 @@ document.addEventListener("click", (e) => {
   fit();
 })();
 
+// A <video> removed from the page keeps downloading until it's garbage
+// collected, so after a few recording switches those leftover downloads
+// starved the new player (it hung until F5). Release it before htmx swaps
+// it out: emptying the source and calling load() aborts the request.
+function releaseVideos(root) {
+  root.querySelectorAll("video").forEach((v) => {
+    v.pause();
+    v.removeAttribute("src");
+    v.querySelectorAll("source").forEach((s) => s.remove());
+    v.load();
+  });
+}
+document.addEventListener("htmx:beforeSwap", (e) => {
+  const target = e.detail.target;
+  if (target && e.detail.shouldSwap !== false) releaseVideos(target);
+});
+window.addEventListener("pagehide", () => releaseVideos(document));
+
 // "▶ Ir" next to each guest: jump the player to when they joined.
 document.addEventListener("click", (e) => {
   const button = e.target.closest("[data-seek]");

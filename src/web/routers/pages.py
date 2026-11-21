@@ -70,7 +70,7 @@ def _live_info(db, channel_id, status):
     guests = [
         p["username"]
         for p in participants_repo.list_for_recording(db, recording["id"])
-        if p["end_seconds"] is None
+        if p["end_seconds"] is None and p["username"]
     ]
     flags = status.get("flags") or {}
     stalled_since = flags.get("stalled_since")
@@ -287,7 +287,8 @@ def _group_guests(participants):
         group["ranges"].append({"start": p["start_seconds"], "end": p["end_seconds"]})
         if p["end_seconds"] is not None:
             group["seconds"] += p["end_seconds"] - p["start_seconds"]
-    return list(groups.values())
+    # Panels the video showed but TikTok never named ("") go last.
+    return sorted(groups.values(), key=lambda g: not g["username"])
 
 
 def _parse_int(value):

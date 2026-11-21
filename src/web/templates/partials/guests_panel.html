@@ -3,13 +3,19 @@
   <section class="panel guests-panel">
     <div class="panel-head">
       <h3>Con quién estuvo</h3>
-      <span class="muted">{{ guest_groups | length }} persona{{ "s" if guest_groups | length != 1 else "" }}</span>
+      {% set named = guest_groups | selectattr("username") | list | length %}
+      <span class="muted">{{ named }} persona{{ "s" if named != 1 else "" }}</span>
     </div>
     <ul class="guests">
       {% for g in guest_groups %}
       <li class="guest" data-guest data-ranges='{{ g.ranges | tojson }}'>
+        {% if g.username %}
         {{ avatar(g.username, "xs") }}
         <a class="creator-link" href="https://www.tiktok.com/@{{ g.username }}" target="_blank" rel="noopener">@{{ g.username }}</a>
+        {% else %}
+        <span class="avatar avatar-xs avatar-unknown">?</span>
+        <span class="guest-unknown" title="El video muestra a alguien más en pantalla, pero TikTok no dijo quién era">Sin identificar</span>
+        {% endif %}
         <span class="guest-ranges">
           {% for range in g.ranges %}
           {% if r.format == "mp4" and r.status == "completed" %}

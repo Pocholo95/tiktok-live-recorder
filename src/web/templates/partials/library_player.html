@@ -117,21 +117,30 @@ if (window.initPlayer) window.initPlayer(document.getElementById("player"));
   function update() {
     const t = video.currentTime || 0;
     const now = [];
+    let unknown = 0;  // panels the video shows but TikTok didn't name
     guests.forEach((g) => {
       const end = g.end_seconds == null ? Infinity : g.end_seconds;
-      if (t >= g.start_seconds && t < end && !now.includes(g.username)) now.push(g.username);
+      if (!(t >= g.start_seconds && t < end)) return;
+      if (!g.username) unknown++;
+      else if (!now.includes(g.username)) now.push(g.username);
     });
-    const key = now.join(",");
+    const key = now.join(",") + "|" + unknown;
     if (key === shown) return;
     shown = key;
 
     people.replaceChildren(chip(creator, true));
-    if (now.length) {
+    if (now.length || unknown) {
       const sep = document.createElement("span");
       sep.className = "on-screen-with";
       sep.textContent = "con";
       people.appendChild(sep);
       now.forEach((name) => people.appendChild(chip(name, false)));
+      if (unknown) {
+        const el = document.createElement("span");
+        el.className = "on-screen-chip is-unknown";
+        el.textContent = unknown === 1 ? "1 sin identificar" : `${unknown} sin identificar`;
+        people.appendChild(el);
+      }
     } else {
       const solo = document.createElement("span");
       solo.className = "on-screen-with";

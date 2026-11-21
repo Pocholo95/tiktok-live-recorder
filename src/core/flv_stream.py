@@ -62,7 +62,11 @@ class FlvNormalizer:
     `new_connection()` before feeding bytes from a re-opened stream.
     """
 
-    def __init__(self):
+    def __init__(self, on_video_frame=None):
+        # Optional `on_video_frame(output_ts_ms, tag_payload)` for every video
+        # frame written (used to read TikTok's layout SEI). Its errors are
+        # swallowed: it must never affect the recording.
+        self._on_video_frame = on_video_frame
         self._buffer = bytearray()
         self._expect_header = True
         self._first_connection = True
@@ -170,6 +174,12 @@ class FlvNormalizer:
             out_ts if self._last_out_ts is None else max(self._last_out_ts, out_ts)
         )
 
+        if self._on_video_frame is not None and tag_type == _TAG_VIDEO:
+            try:
+                self._on_video_frame(out_ts, data)
+            except Exception:
+                self._on_video_frame = None  # broken listener: stop calling it
+
         out = bytearray()
         for pending in self._pending:
             out += self._stamp(pending, out_ts)
@@ -213,12 +223,14 @@ class TsRemuxer:
     be concatenated), so a hiccup never ends the recording.
     """
 
-    def __init__(self, output_path, ffmpeg_path=None, max_restarts=20):
+    def __init__(
+        self, output_path, ffmpeg_path=None, max_restarts=20, on_video_frame=None
+    ):
         self.output_path = output_path
         self._ffmpeg = ffmpeg_path or "ffmpeg"
         self._max_restarts = max_restarts
         self._restarts = 0
-        self._normalizer = FlvNormalizer()
+        self._normalizer = FlvNormalizer(on_video_frame=on_video_frame)
         self._proc = None
         self._out_file = open(output_path, "ab")
         self._stderr_tail = deque(maxlen=20)

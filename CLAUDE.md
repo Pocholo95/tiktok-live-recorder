@@ -190,7 +190,22 @@ copies of the `*.example` files.
   to `<recording>.participants.jsonl` next to the recording (downloadable
   from the guests panel) - ask the user for it when a list looks wrong.
   With 3+ linked creators `rival_anchor_id` rotates among them (confirmed
-  2026-11-20, see Backlog "Guest source for 3+ linked creators").
+  2026-11-20), so since then the VIDEO gives the times (user chose this
+  "video + sala" approach 2026-11-20, on trial for a few days):
+  `core/layout.py` `LayoutTracker` reads TikTok's mix-layout SEI
+  (`{"app_data": "{\"grids\":[...], \"anchor_link_mic_id\": ...}"}`, ~1/s)
+  from every video frame via `FlvNormalizer(on_video_frame=...)` (byte
+  search, at most one JSON parse per second of video). Each grid except
+  the creator's (`anchor_link_mic_id`) is a guest panel; `cid` is a
+  per-link session id, not a user. A panel missing 5 s is gone; no layout
+  for 10 s = solo again. Room-info polls only add names: a name not on
+  screen yet goes to the NEWEST unnamed open panel (`LayoutTracker.name`).
+  Once a recording has seen any layout, the snapshot comes from the panels
+  (unnamed ones saved with username "" and shown as "Sin identificar",
+  excluded from counts, list pills and dashboard); without layout the old
+  poll-only logic applies. Panels are also logged to `.participants.jsonl`
+  (`"panels"` lines). Unknown: whether 2-person co-hosts and multi-guest
+  (viewers) lives carry the same SEI - only a 4-creator co-host was seen.
   Age-restricted lives need `sessionid_ss` in cookies.json. Any failure
   only drops the names; it must never affect the recording. Time ranges
   go to `recording_participants` and are shown only in the web UI (the
@@ -288,8 +303,9 @@ Agreed but not built yet. Move items out of here when they ship.
   - Websocket sources (TikTokLive / TikTok-Live-Connector) declined by
     the user 2026-11-20: they depend on Euler Stream signing. Don't
     propose them again.
-  - Remaining idea (not yet chosen): exact panel times from SEI + names
-    accumulated from the rotating `rival_anchor_id` polls.
+  - Built 2026-11-20 as SEI panels + names from the rotating polls (see
+    "Web hub"); the user is trying it for a few days. Next possible step:
+    the panel's position (x/y/w/h is in the SEI) to show who is where.
 
 ### Findings from the live UI review (2026-11-12, not yet chosen)
 

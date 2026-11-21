@@ -141,6 +141,7 @@ class ParticipantTracker:
         clock=None,
         debug_path=None,
         on_access_denied=None,
+        layout=None,
     ):
         self._api = api
         self._room_id = room_id
@@ -149,6 +150,11 @@ class ParticipantTracker:
         self._clock = clock or time.monotonic
         self._debug_path = debug_path
         self._on_access_denied = on_access_denied
+        # core.layout.LayoutTracker fed from the video: once it has seen the
+        # mix layout, its panels give the times and polls only add names.
+        self._layout = layout
+        self._last_emitted = []
+        self._last_panels = None
         self._access_denied_reported = False
         self._resolver = UsernameResolver(api.http_client)
         self._started = self._clock()
@@ -174,14 +180,16 @@ class ParticipantTracker:
         self._stop.set()
         if self._thread.ident is not None:  # only if start() actually ran
             self._thread.join(timeout=10)
+        now = self._elapsed()
         if self._open:
-            now = self._elapsed()
             for username, interval in self._open.items():
                 # Someone already missing at the end left when first missed.
                 misses = self._misses.get(username)
                 interval["end_seconds"] = misses[1] if misses else now
             self._open.clear()
-            self._emit()
+        if self._layout is not None:
+            self._layout.finish(now)
+        self._emit()
 
     def _elapsed(self):
         return round(self._clock() - self._started, 1)
@@ -199,6 +207,17 @@ class ParticipantTracker:
             self._stop.wait(self._current_interval())
 
     def poll_once(self):
+        try:
+            self._poll_room()
+        finally:
+            # The video layout keeps working even when room info doesn't
+            # (no session, TikTok errors): guests then show up unnamed.
+            if self._layout is not None and self._layout.seen_any:
+                self._layout.tick(self._elapsed())
+                self._write_panels_debug()
+                self._emit()
+
+    def _poll_room(self):
         try:
             room_data = self._api.get_room_data(self._room_id)
             if room_data is None:
@@ -219,6 +238,8 @@ class ParticipantTracker:
                 self._warned = True
             return
         self._write_debug(room_data, ids, resolved)
+        if self._layout is not None:
+            self._layout.name(sorted(resolved.values()))
         self._update(set(resolved.values()))
 
     def _report_access_denied(self):
@@ -247,6 +268,25 @@ class ParticipantTracker:
             "linkmic_layout": room_data.get("linkmic_layout"),
             "with_linkmic": room_data.get("with_linkmic"),
         }
+        self._append_debug(record)
+
+    def _write_panels_debug(self):
+        panels = self._layout.debug_state()
+        if panels == self._last_panels:
+            return
+        self._last_panels = panels
+        self._append_debug(
+            {
+                "elapsed_seconds": self._elapsed(),
+                "clock": "video",
+                "time_utc": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+                "panels": panels,  # guest panel id (from the video) -> name
+            }
+        )
+
+    def _append_debug(self, record):
+        if not self._debug_path:
+            return
         try:
             with open(self._debug_path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
@@ -299,8 +339,17 @@ class ParticipantTracker:
                 return interval
         return None
 
+    def _snapshot(self):
+        if self._layout is not None and self._layout.seen_any:
+            return self._layout.snapshot()
+        return [dict(i) for i in self._intervals]
+
     def _emit(self):
+        snapshot = self._snapshot()
+        if snapshot == self._last_emitted:
+            return  # nothing new to save
+        self._last_emitted = snapshot
         try:
-            self._on_change([dict(i) for i in self._intervals])
+            self._on_change(snapshot)
         except Exception as e:
             logger.warning(f"Could not save guest names: {e}")

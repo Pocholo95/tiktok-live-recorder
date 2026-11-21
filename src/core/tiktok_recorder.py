@@ -6,6 +6,7 @@ from threading import Thread
 from requests import RequestException
 
 from core.flv_stream import TsRemuxer
+from core.layout import LayoutTracker
 from core.participants import ParticipantTracker
 from core.tiktok_api import TikTokAPI
 from utils.custom_exceptions import LiveNotFound, TikTokRecorderError, UserLiveError
@@ -45,6 +46,7 @@ class TikTokRecorder:
         self._last_live_end = None
         self._tracker = None
         self._remuxer = None  # the current recording's, for its video clock
+        self._layout = None  # guest panels read from the current video
 
     @property
     def automatic_interval(self):
@@ -271,6 +273,7 @@ class TikTokRecorder:
         self._on_status("recording_started", user=user, file_path=output)
 
         self._remuxer = None
+        self._layout = None
         tracker = self._start_participant_tracker(user, room_id, output)
         self._tracker = tracker
         try:
@@ -303,6 +306,7 @@ class TikTokRecorder:
         if not self._track_participants:
             return None
         try:
+            layout = LayoutTracker()
             tracker = ParticipantTracker(
                 TikTokAPI(proxy=None, cookies=self._cookies),
                 room_id,
@@ -311,6 +315,7 @@ class TikTokRecorder:
                 ),
                 debug_path=str(Path(output).with_suffix(".participants.jsonl")),
                 clock=self._media_seconds,
+                layout=layout,
                 on_access_denied=lambda: self._on_status(
                     "session_problem",
                     user=user,
@@ -323,6 +328,7 @@ class TikTokRecorder:
                 ),
             )
             tracker.start()
+            self._layout = layout
             return tracker
         except Exception as e:
             logger.warning(f"Guest name tracking not started: {e}")
@@ -394,7 +400,12 @@ class TikTokRecorder:
             # and resolution changes spliced into one timeline) and remuxed
             # to MPEG-TS on the fly - see core/flv_stream.py. No transcode
             # happens on this machine; the MP4 is made offline on a GPU.
-            remuxer = TsRemuxer(output, ffmpeg_path=self.ffmpeg_path)
+            layout = self._layout
+            remuxer = TsRemuxer(
+                output,
+                ffmpeg_path=self.ffmpeg_path,
+                on_video_frame=layout.feed_video if layout is not None else None,
+            )
             self._remuxer = remuxer
             try:
                 stop_recording = False

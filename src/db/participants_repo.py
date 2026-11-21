@@ -36,7 +36,7 @@ def usernames_for_recordings(conn, recording_ids):
         f"""
         SELECT recording_id, username, MIN(start_seconds) AS first_seen
         FROM recording_participants
-        WHERE recording_id IN ({placeholders})
+        WHERE recording_id IN ({placeholders}) AND username != ''
         GROUP BY recording_id, username
         ORDER BY first_seen
         """,

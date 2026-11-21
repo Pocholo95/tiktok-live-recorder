@@ -621,6 +621,30 @@ def test_guests_are_grouped_per_person(client, app):
     assert 'data-seek="244' in text  # each range jumps to its own start
 
 
+def test_unnamed_guests_show_as_unidentified_and_stay_out_of_lists(client, app):
+    from db import participants_repo
+
+    conn = get_connection(app.state.db_path)
+    channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)
+    rid = _completed(conn, channel_id, "/output/u.mp4", "mp4")
+    participants_repo.replace_for_recording(
+        conn,
+        rid,
+        [
+            {"username": "", "start_seconds": 5, "end_seconds": 40},
+            {"username": "ana", "start_seconds": 10, "end_seconds": 90},
+        ],
+    )
+
+    text = client.get(f"/library?recording_id={rid}").text
+
+    assert "Sin identificar" in text
+    assert "1 persona<" in text  # only named people are counted
+    assert text.index("@ana") < text.index("Sin identificar")
+    assert 'tiktok.com/@"' not in text  # no link to an empty handle
+    assert "con @ana<" in text  # sidebar list: names only
+
+
 def test_dates_are_localized_client_side(client, app):
     conn = get_connection(app.state.db_path)
     channel_id = channels_repo.insert(conn, username="creator", mode=Mode.AUTOMATIC)

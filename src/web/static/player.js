@@ -218,7 +218,7 @@
       previewTime.textContent = fmt(t);
       const who = guests
         .filter((g) => t >= g.start_seconds && t < (g.end_seconds == null ? Infinity : g.end_seconds))
-        .map((g) => "@" + g.username);
+        .map((g) => (g.username ? "@" + g.username : "sin identificar"));
       previewWho.textContent = [...new Set(who)].join(" · ");
       previewWho.hidden = !who.length;
       if (storyboard) {
@@ -304,7 +304,8 @@
         const seg = el("div", "pc-guest");
         seg.style.left = pct(g.start_seconds);
         seg.style.width = pct(Math.max(end - g.start_seconds, d / 500));
-        seg.style.setProperty("--hue", hue(g.username));
+        if (g.username) seg.style.setProperty("--hue", hue(g.username));
+        else seg.classList.add("is-unknown");
         lane.append(seg);
       });
     }

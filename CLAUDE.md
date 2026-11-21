@@ -159,8 +159,11 @@ copies of the `*.example` files.
   1.10 in uv.lock (test: `tests/web/test_media_disconnect.py`, fails on
   1.6.0), streaming endpoints read the row with `_lookup` instead of
   holding `Depends(get_db)` for the whole response, the health monitor
-  alerts on Discord at 80 % of the fd limit, and the compose example sets
-  `ulimits: nofile` to 65536. The 60 s restart was `stop_grace_period`.
+  alerts on Discord at 80 % of the fd limit. The default 1024 limit is
+  kept on purpose (user decision 2026-11-21): normal use needs a few dozen,
+  and a low limit makes the 80 % alert catch a future leak early. After
+  the fix playback was smooth again. The 60 s restart was
+  `stop_grace_period`.
 - Custom player controls (user chose own controls over Plyr, 2026-11-20):
   `static/player.js` `initPlayer(#player)`, called from
   library_player.html on every render (tears down the previous instance;

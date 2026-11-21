@@ -287,6 +287,14 @@ copies of the `*.example` files.
   and an exact cid name later replaces such a guess. Panels keep their
   box (x/y/w/h); `.participants.jsonl` "panels" lines log
   {cid: {name, by, box}}.
+  Old recordings (panels saved, names from the rotating polls) are
+  renamed once at startup by `supervisor/guest_names.py`: each row gets
+  the cid that newly appeared in the first "panels" line at/after its
+  start (several at once: the one that left when the row ended - the old
+  names can't decide, they're what was wrong), then its room's owner.
+  Times untouched; refused rooms keep the old name; Settings key
+  `guest_names_by_cid_done`. Dry run on recording 43 found swapped and
+  wrong names (e.g. a "flt65" row was miranda_fernandezzz).
   Once a recording has seen any layout, the snapshot comes from the panels
   (unnamed ones saved with username "" and shown as "Sin identificar",
   excluded from counts, list pills and dashboard); without layout the old
@@ -394,7 +402,8 @@ Agreed but not built yet. Move items out of here when they ship.
   panels by cid (see "Web hub"). Next possible steps: show who is where
   (panel boxes are stored in memory/debug, not in the DB yet); "appearances"
   on creator pages; re-name old "Sin identificar" rows from the cids in
-  their `.participants.jsonl`. History, checked on the hub 2026-11-20:
+  their `.participants.jsonl` - shipped 2026-11-21. History, checked on
+  the hub 2026-11-20:
   - Room info never lists more than one id; `linked_user_list` /
     `show_user_list` are always empty. In a 4-panel co-host
     (`link_mic.channel_info.layout = 4`, recording 39) `rival_anchor_id`

@@ -53,6 +53,23 @@ def main():
         daemon=True,
     ).start()
 
+    # Guest names on recordings from before panels were named by their cid
+    # (core/layout.py): rename them from the cids their debug files saved.
+    from core.tiktok_api import TikTokAPI
+    from supervisor.guest_names import run_at_startup as rename_guests
+    from utils.utils import read_cookies
+
+    threading.Thread(
+        target=rename_guests,
+        args=(
+            db_path,
+            get_connection,
+            lambda: TikTokAPI(proxy=None, cookies=read_cookies()),
+        ),
+        name="guest-names-fix",
+        daemon=True,
+    ).start()
+
     reconcile_interval = int(os.environ.get("HUB_RECONCILE_INTERVAL", "5"))
     supervisor = ChannelSupervisor(
         db_path, output_dir, reconcile_interval=reconcile_interval

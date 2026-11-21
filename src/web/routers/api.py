@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from db import recordings_repo
+from supervisor import storyboards
 from web import convert
 from web.deps import get_db
 from web.formatting import basename
@@ -52,16 +53,33 @@ def get_recording(recording_id: int, db=Depends(get_db)):
 
 @router.get("/api/convert/args")
 def convert_args(
-    encoder: str | None = None, size: str | None = None, quality: str | None = None
+    encoder: str | None = None,
+    size: str | None = None,
+    quality: str | None = None,
+    recording_id: int | None = None,
+    db=Depends(get_db),
 ):
     """
     ffmpeg arguments with `{input}` / `{output}` placeholders, for the
-    script to substitute its local paths into.
+    script to substitute its local paths into. With `recording_id`, they
+    also write that recording's seek-bar thumbnails into a `{storyboard}`
+    folder (the script uploads it after the MP4; `storyboard.interval`
+    goes along with it).
     """
     options = convert.normalize(encoder, size, quality)
+    storyboard = None
+    if recording_id is not None:
+        row = recordings_repo.get(db, recording_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Recording not found")
+        storyboard = {
+            "pattern": "{storyboard}/sheet_%03d.jpg",
+            "interval": storyboards.interval_for(row["duration_seconds"] or 3600),
+        }
     return {
         "options": options,
-        "args": convert.ffmpeg_args("{input}", "{output}", options),
+        "args": convert.ffmpeg_args("{input}", "{output}", options, storyboard),
+        "storyboard": {"interval": storyboard["interval"]} if storyboard else None,
     }
 
 

@@ -291,11 +291,61 @@ async def upload_converted(recording_id: int, request: Request):
         _finalize_upload, db_path, recording_id, part_path, final_path
     )
     if status_code == 200:
-        storyboards.remove(final_path)  # a re-upload replaces the old one
-        worker = getattr(request.app.state, "storyboards", None)
-        if worker is not None:
-            worker.wake()
+        # A re-upload replaces the old one. The converting PC normally
+        # uploads the new one right after (PUT .../storyboard); the hub's
+        # worker only builds it if none arrives within its grace period.
+        storyboards.remove(final_path)
     return JSONResponse({"detail": message}, status_code=status_code)
+
+
+_MAX_STORYBOARD_ZIP = storyboards.MAX_SHEETS * storyboards.MAX_SHEET_BYTES
+
+
+@router.put("/recordings/{recording_id}/storyboard")
+async def upload_storyboard(recording_id: int, interval: int, request: Request):
+    """
+    Seek-bar thumbnails made by the PC that converted the recording (same
+    ffmpeg run), as a zip of `sheet_NNN.jpg`. Only for a converted MP4;
+    validated before replacing anything (see storyboards.install_uploaded).
+    """
+    db_path = request.app.state.db_path
+
+    def lookup():
+        conn = get_connection(db_path)
+        try:
+            return recordings_repo.get(conn, recording_id)
+        finally:
+            conn.close()
+
+    recording = await run_in_threadpool(lookup)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    if recording["format"] != "mp4" or recording["status"] != "completed":
+        raise HTTPException(status_code=409, detail="La grabación no es un MP4 listo.")
+
+    video_path = Path(recording["file_path"])
+    zip_path = video_path.with_suffix(".storyboard.zip.part")
+    received = 0
+    try:
+        with open(zip_path, "wb") as out:
+            async for chunk in request.stream():
+                received += len(chunk)
+                if received > _MAX_STORYBOARD_ZIP:
+                    raise HTTPException(status_code=413, detail="Demasiado grande.")
+                out.write(chunk)
+        meta, problem = await run_in_threadpool(
+            storyboards.install_uploaded,
+            video_path,
+            zip_path,
+            interval,
+            recording["duration_seconds"],
+            os.environ.get("FFPROBE_PATH", "ffprobe"),
+        )
+    finally:
+        zip_path.unlink(missing_ok=True)
+    if meta is None:
+        return JSONResponse({"detail": problem}, status_code=400)
+    return JSONResponse({"detail": "Listo", "sheets": meta["sheets"]})
 
 
 @router.get("/avatars/{username}")

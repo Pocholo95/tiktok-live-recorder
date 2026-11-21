@@ -1,7 +1,10 @@
 import json
+import os
 import shutil
 import subprocess
 import sys
+import time
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -87,6 +90,76 @@ def test_worker_builds_missing_and_skips_failures(tmp_path):
 
     worker = storyboards.StoryboardWorker(str(db_path), get_connection)
 
+    # Fresh uploads first get time for the converting PC to send theirs.
+    assert worker.run_once() == 0
+    old = time.time() - storyboards.UPLOAD_GRACE_SECONDS - 1
+    for path in (good, bad):
+        os.utime(path, (old, old))
+
     assert worker.run_once() == 1
     assert storyboards.load_meta(good) is not None
     assert worker.run_once() == 0  # done ones and failures aren't retried
+
+
+def _sheets_zip(path, names, data=None):
+    with zipfile.ZipFile(path, "w") as archive:
+        for name in names:
+            archive.writestr(name, data if data is not None else _jpeg())
+    return path
+
+
+def _jpeg():
+    out = subprocess.run(
+        [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi",
+            "-i", "color=c=red:size=900x1600", "-frames:v", "1",
+            "-f", "mjpeg", "-",
+        ],
+        capture_output=True, check=True,
+    )  # fmt: skip
+    return out.stdout
+
+
+@needs_ffmpeg
+def test_install_uploaded_sheets(tmp_path):
+    video = tmp_path / "TK_a.mp4"
+    video.write_bytes(b"mp4")
+    zip_path = _sheets_zip(tmp_path / "sb.zip", ["sheet_001.jpg", "sheet_002.jpg"])
+
+    meta, problem = storyboards.install_uploaded(video, zip_path, 2, 300)
+
+    assert problem is None
+    assert meta["tile_width"] == 90 and meta["tile_height"] == 160
+    assert meta["count"] == 150 and meta["sheets"] == 2
+    assert storyboards.load_meta(video) == meta
+    assert (storyboards.storyboard_dir(video) / "sheet_002.jpg").is_file()
+
+
+@pytest.mark.parametrize(
+    "names, data",
+    [
+        (["sheet_001.jpg", "../evil.jpg"], None),
+        (["sheet_001.jpg", "sheet_003.jpg"], None),
+        ([], None),
+        (["sheet_001.jpg"], b"not a jpeg"),
+    ],
+)
+def test_install_uploaded_rejects_bad_zips(tmp_path, names, data):
+    video = tmp_path / "TK_a.mp4"
+    video.write_bytes(b"mp4")
+    zip_path = _sheets_zip(
+        tmp_path / "sb.zip", names, data if data is not None else b"\xff\xd8\xff"
+    )
+
+    meta, problem = storyboards.install_uploaded(video, zip_path, 2, 300)
+
+    assert meta is None and problem
+    assert not storyboards.storyboard_dir(video).exists()
+
+
+def test_install_uploaded_rejects_garbage(tmp_path):
+    video = tmp_path / "TK_a.mp4"
+    zip_path = tmp_path / "sb.zip"
+    zip_path.write_bytes(b"not a zip")
+    assert storyboards.install_uploaded(video, zip_path, 2, 300)[0] is None
+    assert storyboards.install_uploaded(video, zip_path, 0, 300)[0] is None

@@ -8,8 +8,10 @@
   first. With -Id: only those recordings. For each one:
     1. downloads the raw .ts (resumes a partial download),
     2. converts it with ffmpeg using the exact arguments the hub provides
-       (same command the library page shows),
+       (same command the library page shows); the same run also makes the
+       seek-bar thumbnails (storyboard),
     3. uploads the MP4 (the hub validates it before replacing the raw),
+       then the thumbnails as a zip (if that fails the hub makes its own),
     4. deletes the local files (unless -KeepFiles).
   A failure on one recording is logged and the next one continues; nothing
   is deleted on the hub unless it accepted the upload.
@@ -96,7 +98,6 @@ function Invoke-HubConvert {
         Log "Hub: $hubUrl | carpeta: $WorkDir | $Encoder $Size $Quality"
 
         $pending = @((Invoke-RestMethod -Uri "$hubUrl/api/recordings?state=raw").recordings)
-        $convertArgs = (Invoke-RestMethod -Uri "$hubUrl/api/convert/args?encoder=$Encoder&size=$Size&quality=$Quality").args
 
         if ($Id.Count -gt 0) {
             $wanted = $pending | Where-Object { $Id -contains $_.id }
@@ -118,6 +119,8 @@ function Invoke-HubConvert {
             $raw = Join-Path $WorkDir $rec.file_name
             $mp4 = Join-Path $WorkDir $rec.output_name
             $tmp = Join-Path $WorkDir ($rec.output_name -replace "\.mp4$", ".converting.mp4")
+            $sbDir = Join-Path $WorkDir ($rec.output_name -replace "\.mp4$", ".storyboard")
+            $sbZip = "$sbDir.zip"
             Log ("[#{0}] @{1} {2}" -f $recId, $rec.username, $rec.file_name)
 
             if ($DryRun) { continue }
@@ -142,10 +145,14 @@ function Invoke-HubConvert {
                     }
                 }
 
-                # 2. Convert with the hub's exact arguments.
+                # 2. Convert with the hub's exact arguments (asked per
+                # recording: the thumbnail spacing depends on its length).
                 Log "  convirtiendo..."
-                $argsForThis = $convertArgs | ForEach-Object {
-                    $_.Replace("{input}", $raw).Replace("{output}", $tmp)
+                $convert = Invoke-RestMethod -Uri "$hubUrl/api/convert/args?encoder=$Encoder&size=$Size&quality=$Quality&recording_id=$recId"
+                Remove-Item -Recurse -Force $sbDir, $sbZip -ErrorAction SilentlyContinue
+                if ($convert.storyboard) { New-Item -ItemType Directory -Force -Path $sbDir | Out-Null }
+                $argsForThis = $convert.args | ForEach-Object {
+                    $_.Replace("{input}", $raw).Replace("{output}", $tmp).Replace("{storyboard}", $sbDir)
                 }
                 & ffmpeg -y -loglevel error -stats @argsForThis
                 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $tmp)) {
@@ -171,16 +178,35 @@ function Invoke-HubConvert {
                     throw "el hub no muestra la grabacion como MP4 despues de subirla"
                 }
 
+                # 3b. Thumbnails: optional, the hub builds its own if these
+                # don't arrive, so a problem here is only a warning.
+                if ($convert.storyboard -and (Get-ChildItem $sbDir -Filter "sheet_*.jpg" -ErrorAction SilentlyContinue)) {
+                    try {
+                        Compress-Archive -Path (Join-Path $sbDir "sheet_*.jpg") -DestinationPath $sbZip -Force
+                        $sbStatus = & curl.exe -sS -T $sbZip -H "Content-Type: application/zip" -o $response -w "%{http_code}" "$hubUrl/recordings/$recId/storyboard?interval=$($convert.storyboard.interval)"
+                        $sbDetail = ""
+                        if (Test-Path $response) { $sbDetail = Get-Content $response -Raw; Remove-Item $response }
+                        if ($LASTEXITCODE -ne 0 -or $sbStatus -ne "200") {
+                            Log "  AVISO: no se pudieron subir las miniaturas ($sbStatus $sbDetail); el hub las va a generar."
+                        }
+                    }
+                    catch {
+                        Log "  AVISO: no se pudieron subir las miniaturas ($($_.Exception.Message)); el hub las va a generar."
+                    }
+                }
+
                 # 4. Clean up.
                 if (-not $KeepFiles) {
                     Remove-Item -Force $raw, $mp4 -ErrorAction SilentlyContinue
                 }
+                Remove-Item -Recurse -Force $sbDir, $sbZip -ErrorAction SilentlyContinue
                 $done++
                 Log "  listo."
             }
             catch {
                 $failed++
                 Remove-Item -Force $tmp -ErrorAction SilentlyContinue
+                Remove-Item -Recurse -Force $sbDir, $sbZip -ErrorAction SilentlyContinue
                 Log "  ERROR: $($_.Exception.Message) (los archivos locales quedan en $WorkDir)"
             }
         }

@@ -293,3 +293,64 @@ def test_storyboard_endpoints(client, app, tmp_path):
     # Deleting the recording removes its storyboard too.
     client.delete(f"/recordings/{rid}")
     assert not folder.exists()
+
+
+def test_storyboard_upload_installs_validated_sheets(
+    client, app, tmp_path, monkeypatch
+):
+    import io
+    import zipfile
+
+    from supervisor import storyboards
+
+    calls = []
+
+    def fake_install(video_path, zip_path, interval, duration, ffprobe_path):
+        calls.append((Path(video_path).name, zipfile.is_zipfile(zip_path), interval))
+        return {"sheets": 2}, None
+
+    monkeypatch.setattr(storyboards, "install_uploaded", fake_install)
+    video = tmp_path / "TK_up.mp4"
+    video.write_bytes(b"x")
+    conn = get_connection(app.state.db_path)
+    rid = recordings_repo.start(
+        conn, channel_id=None, username="c", file_path=str(video)
+    )
+    recordings_repo.mark_completed(
+        conn, rid, file_path=str(video), format="mp4", duration_seconds=300
+    )
+    body = io.BytesIO()
+    with zipfile.ZipFile(body, "w") as archive:
+        archive.writestr("sheet_001.jpg", b"\xff\xd8\xff")
+
+    response = client.put(
+        f"/recordings/{rid}/storyboard?interval=2", content=body.getvalue()
+    )
+
+    assert response.status_code == 200 and response.json()["sheets"] == 2
+    assert calls == [("TK_up.mp4", True, 2)]
+    assert not list(tmp_path.glob("*.part"))  # the temp zip is cleaned up
+
+
+def test_storyboard_upload_only_for_converted_recordings(client, app, tmp_path):
+    conn, recording_id, raw = _raw_recording(app, tmp_path)
+    response = client.put(
+        f"/recordings/{recording_id}/storyboard?interval=2", content=b"z"
+    )
+    assert response.status_code == 409
+    assert (
+        client.put("/recordings/999/storyboard?interval=2", content=b"z").status_code
+        == 404
+    )
+
+
+def test_storyboard_upload_reports_invalid_zip(client, app, tmp_path):
+    video = tmp_path / "TK_bad.mp4"
+    video.write_bytes(b"x")
+    conn = get_connection(app.state.db_path)
+    rid = recordings_repo.start(
+        conn, channel_id=None, username="c", file_path=str(video)
+    )
+    recordings_repo.mark_completed(conn, rid, file_path=str(video), format="mp4")
+    response = client.put(f"/recordings/{rid}/storyboard?interval=2", content=b"nope")
+    assert response.status_code == 400

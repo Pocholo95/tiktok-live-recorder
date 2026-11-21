@@ -134,9 +134,19 @@ copies of the `*.example` files.
 - Storyboards (seek-bar thumbnails): `supervisor/storyboards.py`,
   `<video>.storyboard/` next to the MP4 (`sheet_NNN.jpg` 10x10 grids,
   tiles 160 px high, one every `max(2, ceil(duration/1000))` s, plus
-  `meta.json`). `StoryboardWorker` thread (serve.py, `app.state.storyboards`)
-  builds missing ones newest first, keyframes only, `nice`, rescans every
-  10 min and is woken after an upload. Served by `/media/{id}/storyboard`
+  `meta.json`). Made on the user's PC while converting (user decision
+  2026-11-20, to spare the hub's NAS HDD from re-reading every MP4): the
+  script asks `/api/convert/args?recording_id=N`, which adds a second
+  output to the same ffmpeg run (`-filter_complex ... split=2[v][s]` ->
+  `{storyboard}/sheet_%03d.jpg`, interval from the recording's duration),
+  then after the MP4 upload zips the sheets and sends
+  `PUT /recordings/{id}/storyboard?interval=N` (`install_uploaded`
+  validates names, JPEG magic, sizes, consecutive sheets; failure is only
+  a warning in the script). The manual command (no recording_id) stays a
+  single output. Fallback: `StoryboardWorker` thread (serve.py,
+  `app.state.storyboards`) builds missing ones for MP4s older than
+  `UPLOAD_GRACE_SECONDS` (15 min, so the PC's upload wins), newest first,
+  keyframes only, `nice`, rescans every 10 min. Served by `/media/{id}/storyboard`
   (JSON, 404 until built) and `/media/{id}/storyboard/{n}.jpg`; deleted
   with the recording.
 - Library: `/library` renders `library.html`, `partials/library_content.html`

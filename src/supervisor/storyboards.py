@@ -6,7 +6,11 @@ sheets of small frames (one every `interval` seconds, COLS x ROWS per
 sheet) plus `meta.json` describing the grid. The library player reads it
 to show a frame while hovering/dragging the seek bar.
 
-Built in the background, one video at a time, at low priority: only
+Normally the user's PC makes them while converting (a second output of
+the same ffmpeg run, see web/convert.py) and uploads them as a zip right
+after the MP4 (`install_uploaded`). The background worker below is the
+fallback for MP4s that arrive without them (uploaded by hand, older ones):
+built one video at a time, at low priority: only
 keyframes are decoded (`-skip_frame nokey`, our MP4s have one every 2 s),
 so a 3 h live takes about a minute of CPU. Recording never re-encodes, so
 it isn't affected. A failure only means no previews for that video.
@@ -15,9 +19,12 @@ it isn't affected. A failure only means no previews for that video.
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import threading
+import time
+import zipfile
 from pathlib import Path
 
 from utils.logger_manager import logger
@@ -28,6 +35,21 @@ ROWS = 10
 MAX_TILES = 1000
 MIN_INTERVAL = 2  # the converted MP4s have a keyframe every 2 s
 RESCAN_SECONDS = 600
+# A fresh MP4 gets this long for its storyboard to be uploaded by the PC
+# that converted it before the hub builds one itself.
+UPLOAD_GRACE_SECONDS = 15 * 60
+MAX_SHEETS = 20
+MAX_SHEET_BYTES = 8 * 1024 * 1024
+_SHEET_NAME = re.compile(r"^sheet_(\d{3})\.jpg$")
+
+
+def _settled(video_path):
+    """The MP4 exists and is old enough that its upload grace is over."""
+    try:
+        age = time.time() - Path(video_path).stat().st_mtime
+    except OSError:
+        return False
+    return age >= UPLOAD_GRACE_SECONDS
 
 
 def storyboard_dir(video_path):
@@ -111,6 +133,62 @@ def generate(video_path, duration, ffmpeg_path="ffmpeg", ffprobe_path="ffprobe")
     return meta
 
 
+def install_uploaded(video_path, zip_path, interval, duration, ffprobe_path="ffprobe"):
+    """
+    Installs storyboard sheets uploaded as a zip (made by the PC while
+    converting). Returns (meta, None) or (None, reason) - on any problem
+    nothing is changed.
+    """
+    video_path = Path(video_path)
+    if not 1 <= interval <= 3600:
+        return None, "Intervalo inválido."
+    final = storyboard_dir(video_path)
+    work = final.with_name(final.name + ".upload")
+    shutil.rmtree(work, ignore_errors=True)
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            entries = [e for e in archive.infolist() if not e.is_dir()]
+            numbers = []
+            for entry in entries:
+                match = _SHEET_NAME.match(Path(entry.filename).name)
+                if not match or entry.file_size > MAX_SHEET_BYTES:
+                    return None, f"Archivo inesperado en el zip: {entry.filename}"
+                numbers.append(int(match.group(1)))
+            if not numbers or len(numbers) > MAX_SHEETS:
+                return None, "El zip no trae hojas de miniaturas."
+            if sorted(numbers) != list(range(1, len(numbers) + 1)):
+                return None, "Faltan hojas de miniaturas."
+            work.mkdir(parents=True)
+            for entry, number in zip(entries, numbers, strict=True):
+                data = archive.read(entry)
+                if data[:3] != b"\xff\xd8\xff":
+                    raise ValueError(f"{entry.filename} no es un JPEG")
+                (work / f"sheet_{number:03d}.jpg").write_bytes(data)
+        width, height = _probe_size(work / "sheet_001.jpg", ffprobe_path)
+        if not width or not height:
+            raise ValueError("no se pudo leer el tamaño de las hojas")
+    except (OSError, ValueError, zipfile.BadZipFile, subprocess.SubprocessError) as e:
+        shutil.rmtree(work, ignore_errors=True)
+        return None, f"Miniaturas inválidas: {e}"
+
+    meta = {
+        "interval": interval,
+        "cols": COLS,
+        "rows": ROWS,
+        "tile_width": width // COLS,
+        "tile_height": height // ROWS,
+        "count": min(
+            math.ceil((duration or 0) / interval) or len(numbers) * COLS * ROWS,
+            len(numbers) * COLS * ROWS,
+        ),
+        "sheets": len(numbers),
+    }
+    (work / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    shutil.rmtree(final, ignore_errors=True)
+    work.rename(final)
+    return meta, None
+
+
 class StoryboardWorker:
     """
     Background thread that builds missing storyboards, newest MP4 first
@@ -152,7 +230,7 @@ class StoryboardWorker:
             if r["id"] not in self._failed
             and r["file_path"]
             and load_meta(r["file_path"]) is None
-            and Path(r["file_path"]).is_file()
+            and _settled(r["file_path"])
         ]
 
     def run_once(self):

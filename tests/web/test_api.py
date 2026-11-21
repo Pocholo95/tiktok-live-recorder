@@ -150,3 +150,24 @@ def test_script_verifies_uploads_before_cleaning_up(client):
     assert '$status -ne "200"' in text
     assert '$after.format -ne "mp4"' in text
     assert "%{redirect_url}" in text
+
+
+def test_api_convert_args_with_storyboard_for_a_recording(client, app):
+    rid = _recording(app, "/out/TK_a.ts", "ts")
+    conn = get_connection(app.state.db_path)
+    conn.execute("UPDATE recordings SET duration_seconds = 9594 WHERE id = ?", (rid,))
+    conn.commit()
+
+    data = client.get(f"/api/convert/args?recording_id={rid}").json()
+
+    assert data["storyboard"] == {"interval": 10}
+    args = data["args"]
+    assert "-filter_complex" in args and "-vf" not in args
+    graph = args[args.index("-filter_complex") + 1]
+    assert "split=2[v][s]" in graph and "fps=1/10" in graph and "tile=10x10" in graph
+    assert args[-1] == "{storyboard}/sheet_%03d.jpg"
+    assert "{output}" in args
+    # Without a recording (manual command): plain single output, as before.
+    plain = client.get("/api/convert/args").json()
+    assert plain["storyboard"] is None and "-vf" in plain["args"]
+    assert client.get("/api/convert/args?recording_id=999").status_code == 404

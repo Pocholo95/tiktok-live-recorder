@@ -216,11 +216,39 @@ def _probe(path):
         return None
 
 
-def _finalize_upload(db_path, recording_id, part_path, final_path):
+# A converted MP4 may legitimately run a bit longer than its raw recording
+# (ffmpeg pads TikTok's audio timestamp jumps: +33 s / 3 % on recording 42),
+# but the MP4 of a different live is usually off by far more.
+DURATION_TOLERANCE_SECONDS = 60
+DURATION_TOLERANCE_RATIO = 0.05
+
+
+def _duration(info):
+    try:
+        return float(info["format"]["duration"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def duration_mismatch(raw_seconds, mp4_seconds):
+    """True when the two can't be the same live (unknown = no opinion)."""
+    if not raw_seconds or not mp4_seconds:
+        return False
+    allowed = max(DURATION_TOLERANCE_SECONDS, raw_seconds * DURATION_TOLERANCE_RATIO)
+    return abs(mp4_seconds - raw_seconds) > allowed
+
+
+def _clock(seconds):
+    seconds = int(round(seconds))
+    return f"{seconds // 3600}:{seconds // 60 % 60:02d}:{seconds % 60:02d}"
+
+
+def _finalize_upload(db_path, recording_id, part_path, final_path, force=False):
     """
     Validate the uploaded MP4 and swap it in for the raw recording. Runs in
     a worker thread (ffprobe + thumbnail are blocking) with its own DB
-    connection. Returns (status_code, message).
+    connection. Returns (status_code, message) - 409 when its duration
+    doesn't match the raw recording (likely another live), unless `force`.
     """
     info = _probe(part_path)
     video_codecs = [
@@ -239,10 +267,8 @@ def _finalize_upload(db_path, recording_id, part_path, final_path):
             "Usá H.264 o AV1."
         )
 
-    try:
-        duration = round(float(info["format"]["duration"]))
-    except (KeyError, TypeError, ValueError):
-        duration = None
+    mp4_seconds = _duration(info)
+    duration = round(mp4_seconds) if mp4_seconds is not None else None
 
     conn = get_connection(db_path)
     try:
@@ -252,6 +278,14 @@ def _finalize_upload(db_path, recording_id, part_path, final_path):
             return 404, "La grabación ya no existe."
 
         raw_path = Path(recording["file_path"])
+        if not force and recording["format"] != "mp4" and raw_path != final_path:
+            raw_seconds = _duration(_probe(raw_path))
+            if duration_mismatch(raw_seconds, mp4_seconds):
+                part_path.unlink(missing_ok=True)
+                return 409, (
+                    f"El MP4 dura {_clock(mp4_seconds)} y la grabación original "
+                    f"{_clock(raw_seconds)}: no parece el mismo live."
+                )
         os.replace(part_path, final_path)
         thumbnail_path = generate_thumbnail(str(final_path))
         recordings_repo.replace_with_converted(
@@ -273,14 +307,15 @@ def _finalize_upload(db_path, recording_id, part_path, final_path):
 
 
 @router.put("/recordings/{recording_id}/converted")
-async def upload_converted(recording_id: int, request: Request):
+async def upload_converted(recording_id: int, request: Request, force: bool = False):
     """
     Receives the MP4 converted offline (on the user's GPU) as the raw
     request body and swaps it in for the raw .ts/.flv. The body is streamed
     straight to a `.part` file next to the recording - never buffered in
     memory or a temp dir - and only replaces the raw file once ffprobe
-    confirms it's a browser-playable MP4. Any failure leaves the raw
-    recording untouched.
+    confirms it's a browser-playable MP4 about as long as the raw recording
+    (409 otherwise; `?force=1` accepts it anyway). Any failure leaves the
+    raw recording untouched.
     """
     db_path = request.app.state.db_path
 
@@ -314,7 +349,7 @@ async def upload_converted(recording_id: int, request: Request):
         raise HTTPException(status_code=400, detail="El archivo llegó vacío.")
 
     status_code, message = await run_in_threadpool(
-        _finalize_upload, db_path, recording_id, part_path, final_path
+        _finalize_upload, db_path, recording_id, part_path, final_path, force
     )
     if status_code == 200:
         # A re-upload replaces the old one. The converting PC normally

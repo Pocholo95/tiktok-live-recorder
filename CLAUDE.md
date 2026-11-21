@@ -79,8 +79,14 @@ copies of the `*.example` files.
   raw) or `mp4` (old server-side transcodes).
 - The user converts on their own PC (RTX 4070, NVENC) and uploads the MP4:
   `PUT /recordings/{id}/converted` streams the body to `<name>.mp4.part`,
-  validates it with ffprobe (MP4 container, H.264/AV1/VP9), then swaps it
-  in. Any failure leaves the raw untouched.
+  validates it with ffprobe (MP4 container, H.264/AV1/VP9) and checks its
+  duration against the raw's (`duration_mismatch`: off by more than
+  max(60 s, 5 %) -> 409, nothing changed; `?force=1` accepts it), then
+  swaps it in. Any failure leaves the raw untouched. The tolerance is wide
+  on purpose: recording 42's correct MP4 ran 3 % longer than its raw
+  (ffmpeg padding a TikTok audio jump). The library's drop zone asks
+  before uploading a file not named `<raw stem>.mp4`, and on a 409 shows
+  both durations and offers to upload anyway.
 - Kept originals (user decision 2026-11-20, after an MP4 came out with
   half its audio missing and there was nothing left to check):
   `supervisor/originals.py`. The replaced raw stays where it was, the row
@@ -317,6 +323,9 @@ copies of the `*.example` files.
   synced to playback). The user decided against burning names into the
   MP4: TikTok's layout changes made fixed positions land on the video or
   the black bars unpredictably, and per-panel placement isn't knowable.
+- The user's TikTok `sessionid_ss` expires almost daily (2026-11-21); they
+  renew it in Settings -> Cookies. Without a working one, age-restricted
+  lives record without guest names and their cids can't be looked up.
 - `src/cookies.json` is marked `git update-index --skip-worktree` on the
   user's machine because it holds their TikTok session. Never commit it.
 - Live notices go to a Discord webhook: `notify/discord_webhook.py`. The
@@ -385,14 +394,6 @@ Agreed but not built yet. Move items out of here when they ship.
 
 ### Pending (user asked to note them)
 
-- **Upload safety.** `PUT /recordings/{id}/converted` only checks that the
-  file is a browser-playable MP4; the MP4 of a *different* live is
-  accepted and swapped in (the raw is now kept for `keep_originals_days`,
-  so it's recoverable for a while, but nothing warns).
-  - [ ] Server: ffprobe raw vs upload and reject (raw untouched) if the
-    durations differ by more than `max(10 s, 2 %)`.
-  - [ ] Browser: if the dropped file isn't named `<raw stem>.mp4`, ask for
-    confirmation before uploading (warning, not a block).
 - **A/V timestamp jump in raw recordings** (found 2026-11-20 on
   recording 42, not yet investigated): at ~696 s the raw's audio
   timestamps jump 21.5 s ahead of the video and then wobble backwards

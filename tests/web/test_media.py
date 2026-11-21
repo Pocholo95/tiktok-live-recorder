@@ -409,3 +409,74 @@ def test_storyboard_upload_reports_invalid_zip(client, app, tmp_path):
     recordings_repo.mark_completed(conn, rid, file_path=str(video), format="mp4")
     response = client.put(f"/recordings/{rid}/storyboard?interval=2", content=b"nope")
     assert response.status_code == 400
+
+
+def _probe_by_suffix(raw_seconds, mp4_seconds):
+    def probe(path):
+        seconds = raw_seconds if str(path).endswith(".ts") else mp4_seconds
+        if seconds is None:
+            return None
+        return {
+            "streams": [{"codec_type": "video", "codec_name": "h264"}],
+            "format": {"format_name": "mov,mp4,m4a", "duration": str(seconds)},
+        }
+
+    return probe
+
+
+def test_upload_of_another_live_is_refused_unless_forced(
+    client, app, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(media_module, "_probe", _probe_by_suffix(7200, 3600))
+    monkeypatch.setattr(media_module, "generate_thumbnail", lambda path: None)
+    conn, recording_id, raw = _raw_recording(app, tmp_path)
+
+    response = client.put(
+        f"/recordings/{recording_id}/converted", content=b"other live"
+    )
+
+    assert response.status_code == 409
+    assert (
+        "1:00:00" in response.json()["detail"]
+        and "2:00:00" in response.json()["detail"]
+    )
+    recording = recordings_repo.get(conn, recording_id)
+    assert recording["format"] == "ts" and raw.read_bytes() == b"raw transport stream"
+    assert not list(tmp_path.glob("*.mp4*"))  # nothing left behind
+
+    forced = client.put(
+        f"/recordings/{recording_id}/converted?force=1", content=b"other live"
+    )
+    assert forced.status_code == 200
+    assert recordings_repo.get(conn, recording_id)["format"] == "mp4"
+
+
+def test_upload_tolerates_padding_and_unknown_raw_duration(
+    client, app, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(media_module, "generate_thumbnail", lambda path: None)
+    # Recording 42: the MP4 came out 33 s (3 %) longer than its raw.
+    monkeypatch.setattr(media_module, "_probe", _probe_by_suffix(1077, 1110))
+    conn, recording_id, _raw = _raw_recording(app, tmp_path)
+    assert (
+        client.put(f"/recordings/{recording_id}/converted", content=b"x").status_code
+        == 200
+    )
+
+    # A raw ffprobe can't read gives no opinion: the upload isn't blocked.
+    other = tmp_path / "other"
+    other.mkdir()
+    monkeypatch.setattr(media_module, "_probe", _probe_by_suffix(None, 1110))
+    conn, recording_id, _raw = _raw_recording(app, other)
+    assert (
+        client.put(f"/recordings/{recording_id}/converted", content=b"x").status_code
+        == 200
+    )
+
+
+def test_duration_mismatch_thresholds():
+    assert not media_module.duration_mismatch(1077, 1110)  # +3 %
+    assert not media_module.duration_mismatch(600, 655)  # within 60 s
+    assert media_module.duration_mismatch(600, 700)
+    assert media_module.duration_mismatch(7200, 7200 * 1.06)
+    assert not media_module.duration_mismatch(None, 100)

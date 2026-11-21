@@ -48,7 +48,7 @@
         <div class="step-num">3</div>
         <div class="step-body">
           <h3>Subí el MP4</h3>
-          <p class="muted">Reemplaza el crudo: el .{{ r.format }} se borra del servidor y se habilita el editor de clips.</p>
+          <p class="muted">Reemplaza el crudo y se habilita el editor de clips. El .{{ r.format }} queda guardado unos días por si la conversión salió mal. Si el MP4 no dura lo mismo que la grabación, el hub te avisa antes de reemplazarla.</p>
           <label class="dropzone" id="upload-dropzone">
             <input type="file" accept="video/mp4,.mp4" id="upload-input" hidden>
             <span class="dropzone-text" id="upload-text">Arrastrá el <span class="mono">.mp4</span> acá o <u>elegí el archivo</u></span>
@@ -154,10 +154,20 @@
     statusEl.className = "upload-status" + (kind ? ` is-${kind}` : "");
   }
 
-  function upload(file) {
+  function upload(file, force) {
     if (uploading || !file) return;
     if (!/\.mp4$/i.test(file.name)) {
       setStatus("Tiene que ser un archivo .mp4.", "error");
+      return;
+    }
+    // Uploading another live's MP4 would replace this recording: a name
+    // that isn't this recording's is worth a second look (not a block).
+    if (!force && file.name.toLowerCase() !== mp4Name.toLowerCase() &&
+        !window.confirm(
+          `El archivo se llama "${file.name}", pero esta grabación es "${mp4Name}".\n\n` +
+          "¿Seguro que es la conversión de este live?")) {
+      setStatus("Subida cancelada.");
+      input.value = "";
       return;
     }
     uploading = true;
@@ -167,7 +177,7 @@
     setStatus("Subiendo…");
 
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", `/recordings/${recordingId}/converted`);
+    xhr.open("PUT", `/recordings/${recordingId}/converted${force ? "?force=1" : ""}`);
     xhr.setRequestHeader("Content-Type", "video/mp4");
     xhr.upload.addEventListener("progress", (e) => {
       if (!e.lengthComputable) return;
@@ -185,6 +195,10 @@
         htmx.ajax("GET", `/library?recording_id=${recordingId}`, {
           target: "#library-main", swap: "outerHTML",
         });
+      } else if (xhr.status === 409 && !force) {
+        // The hub thinks it's another live (duration doesn't match).
+        fail(detail || "No parece el mismo live.");
+        if (window.confirm(`${detail}\n\n¿Subirlo igual?`)) upload(file, true);
       } else {
         fail(detail || `Error ${xhr.status}`);
       }
@@ -202,7 +216,7 @@
     setStatus(message + " El crudo sigue intacto.", "error");
   }
 
-  input.addEventListener("change", () => upload(input.files[0]));
+  input.addEventListener("change", () => upload(input.files[0], false));
   ["dragenter", "dragover"].forEach((type) => dropzone.addEventListener(type, (e) => {
     e.preventDefault();
     dropzone.classList.add("is-over");
@@ -211,6 +225,6 @@
     e.preventDefault();
     dropzone.classList.remove("is-over");
   }));
-  dropzone.addEventListener("drop", (e) => upload(e.dataTransfer.files[0]));
+  dropzone.addEventListener("drop", (e) => upload(e.dataTransfer.files[0], false));
 })();
 </script>

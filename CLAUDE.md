@@ -176,10 +176,8 @@ copies of the `*.example` files.
   Every time the set of linked ids changes, the raw link data is appended
   to `<recording>.participants.jsonl` next to the recording (downloadable
   from the guests panel) - ask the user for it when a list looks wrong.
-  Open question: a user saw two different co-hosts alternate while both
-  were likely on screen; `rival_anchor_id` may only name the current
-  battle opponent in 3+ creator links. Confirm with a diagnostics file
-  before switching sources (battle_scores / TikTokLive websocket).
+  With 3+ linked creators `rival_anchor_id` rotates among them (confirmed
+  2026-11-20, see Backlog "Guest source for 3+ linked creators").
   Age-restricted lives need `sessionid_ss` in cookies.json. Any failure
   only drops the names; it must never affect the recording. Time ranges
   go to `recording_participants` and are shown only in the web UI (the
@@ -262,11 +260,27 @@ Agreed but not built yet. Move items out of here when they ship.
     durations differ by more than `max(10 s, 2 %)`.
   - [ ] Browser: if the dropped file isn't named `<raw stem>.mp4`, ask for
     confirmation before uploading (warning, not a block).
-- **Guest source for 3+ linked creators** (see the open question in "Web
-  hub"). Needs a `.participants.jsonl` from such a live first. TikTokLive
-  risks already discussed with the user: no account risk if it connects
-  anonymously (never pass the session), some IP rate-limit risk shared
-  with the recorder, depends on Euler Stream signing, protocol churn.
+- **Guest source for 3+ linked creators.** Checked on the hub 2026-11-20:
+  - Room info never lists more than one id; `linked_user_list` /
+    `show_user_list` are always empty. In a 4-panel co-host
+    (`link_mic.channel_info.layout = 4`, recording 39) `rival_anchor_id`
+    rotates among the 3-4 creators every 30-90 s, so the guests panel
+    shows people "coming and going" who were all on screen.
+  - The raw video carries the mix layout in H.264 SEI (per frame):
+    `{"app_data":"{\"grids\":[{id,x,y,w,h,uid_str,cid,talk,...}]}"}`
+    (normalized panel boxes), `{"infos":[{uid,talk,volume}]}` (who is
+    speaking, several times a second) and `anchor_linkmic_id` (the
+    creator's own panel). `cid` / `uid_str` are per-link session ids, not
+    user ids, so SEI gives exact when/where but not who.
+  - Websocket sources (TikTokLive / TikTok-Live-Connector) declined by
+    the user 2026-11-20: they depend on Euler Stream signing. Don't
+    propose them again.
+  - Remaining idea (not yet chosen): exact panel times from SEI + names
+    accumulated from the rotating `rival_anchor_id` polls.
+- **Guest times drift after a cut** (bug found 2026-11-20).
+  `ParticipantTracker` times are wall clock since tracker start, but the
+  video has no gap when the reconnect grace splices a return, so every
+  guest range after a cut is late by the time spent waiting.
 
 ### Findings from the live UI review (2026-11-12, not yet chosen)
 

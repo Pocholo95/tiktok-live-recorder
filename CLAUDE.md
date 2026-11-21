@@ -40,6 +40,15 @@ copies of the `*.example` files.
     Pure Python, tag-level, no decoding.
   - `TsRemuxer` pipes that through `ffmpeg -c copy` into an MPEG-TS file,
     restarting ffmpeg (with cached codec headers) if it dies.
+- Room-id lookup (`TikTokAPI.get_room_id_from_user`, every channel check):
+  asks TikTok's user/room API directly WITHOUT a signature first (user
+  decision 2026-11-21: stop depending on tikrec.com, the original
+  project's signing service, which is often down). `statusCode` 19881007
+  = user not found -> None, no fallback. Only when TikTok refuses (WAF
+  page, other code, no `roomId`) does it use the old signed route via
+  tikrec, then Euler Stream; a warning is logged on the 1st and every 20th
+  refusal in a row. The same response fills `last_user_info` (avatar,
+  nickname). Checked live on 5 accounts with tikrec blocked.
 - Stream URLs (`TikTokAPI.get_live_urls`, from the 2026-11-21 research
   of upstream issues, yt-dlp, streamlink and DouyinLiveRecorder):
   room `status` 2 = live, 3 = paused (still live), 4 = ended
@@ -428,8 +437,8 @@ Agreed but not built yet. Move items out of here when they ship.
   answers WITHOUT signing (streamlink uses it; checked 2026-11-21): roomId,
   status, stream data, `hevcStreamData` (H.265 variants), and
   `multiStreamScene` / `multiStreamSource` (meaning unknown - log them
-  during a live with guests). Could replace the tikrec dependency for the
-  room-id lookup and cheaply check whether a candidate guest is live.
+  during a live with guests). Shipped 2026-11-21 as the primary room-id
+  lookup (see "Recording pipeline").
 - yt-dlp: when a user is a guest on someone else's live, their own room has
   no HLS URLs; it falls back to `https://www.tiktok.com/api/live/detail/?aid=1988&roomID=`.
 - The SEI mix layout is the standard RTC "layout SEI" (Alibaba Cloud /

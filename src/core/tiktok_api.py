@@ -14,6 +14,8 @@ from utils.custom_exceptions import (
 )
 
 
+# user/room API statusCode for an @ that doesn't exist.
+USER_NOT_FOUND = 19881007
 # Room `status`: 2 = live, 3 = live but paused by the creator, 4 = ended.
 # A pause must not end the recording (upstream #463/#483).
 LIVE_ROOM_STATUSES = frozenset({"2", "3"})
@@ -269,8 +271,67 @@ class TikTokAPI:
 
         return f"{self.BASE_URL}{signed_path}"
 
+    def _unsigned_user_room(self, user: str) -> dict | None:
+        """
+        `data` of TikTok's user/room API asked WITHOUT a signature (what
+        streamlink does; checked 2026-11-21) - roomId, live status and the
+        profile. None if TikTok didn't answer it properly (WAF page, error
+        code, unexpected shape), so the caller can try the signed route.
+        """
+        try:
+            response = self.http_client.get(
+                self.API_URL.rstrip("/"),
+                params={
+                    "aid": "1988",
+                    "sourceType": "54",
+                    "staleTime": "600000",
+                    "uniqueId": user,
+                },
+            )
+            if response.status_code != 200:
+                return None
+            data = response.json()
+        except Exception:
+            return None
+        if not isinstance(data, dict):
+            return None
+        if data.get("statusCode") == USER_NOT_FOUND:
+            return {"user": {}}  # a clear answer: no such user, no room
+        if data.get("statusCode", 0) != 0:
+            return None
+        room_data = data.get("data")
+        user_info = (
+            (room_data or {}).get("user") if isinstance(room_data, dict) else None
+        )
+        if not isinstance(user_info, dict) or "roomId" not in user_info:
+            return None
+        return room_data
+
     def get_room_id_from_user(self, user: str) -> str | None:
-        """Given a username, get the room_id."""
+        """
+        Given a username, get the room_id. Asks TikTok directly first; only
+        if that fails, the signed route via tikrec.com (the original
+        project's signing service, often down), then Euler Stream.
+        """
+        room_data = self._unsigned_user_room(user)
+        if room_data is not None:
+            self._unsigned_failures = 0
+            user_info = room_data.get("user") or {}
+            # Same response carries the profile (avatar, display name) - keep
+            # it so the hub can show creator pictures without another request.
+            self.last_user_info = user_info
+            return user_info.get("roomId")
+
+        failures = getattr(self, "_unsigned_failures", 0) + 1
+        self._unsigned_failures = failures
+        if failures == 1 or failures % 20 == 0:
+            logger.warning(
+                f"TikTok refused the unsigned room lookup for @{user} "
+                f"({failures} in a row); using tikrec."
+            )
+        return self._signed_room_id_from_user(user)
+
+    def _signed_room_id_from_user(self, user: str) -> str | None:
         try:
             signed_url = self._tikrec_get_room_id_signed_url(user)
         except TikRecUnavailableError as e:
@@ -288,8 +349,6 @@ class TikTokAPI:
 
         data = response.json()
         user_info = (data.get("data") or {}).get("user", {}) or {}
-        # Same response carries the profile (avatar, display name) - keep it
-        # so the hub can show creator pictures without another request.
         self.last_user_info = user_info
         return user_info.get("roomId")
 

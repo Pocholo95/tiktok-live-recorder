@@ -1,3 +1,4 @@
+import json as json_module
 import sys
 from pathlib import Path
 
@@ -283,3 +284,74 @@ def test_stream_connection_has_a_read_timeout():
     assert list(api.download_live_stream("https://cdn/x.flv")) == [b"FLV"]
     assert calls[0] == {"stream": True, "timeout": tiktok_api.STREAM_TIMEOUT}
     assert calls[-1] == "closed"
+
+
+class _JsonResponse:
+    def __init__(self, data, status_code=200):
+        self._data = data
+        self.status_code = status_code
+        self.text = json_module.dumps(data) if not isinstance(data, str) else data
+
+    def json(self):
+        if isinstance(self._data, str):
+            raise ValueError("not json")
+        return self._data
+
+
+class _LookupClient:
+    def __init__(self, answer):
+        self.answer = answer
+        self.calls = []
+
+    def get(self, url, params=None, **kwargs):
+        self.calls.append((url, params))
+        return self.answer
+
+
+def _lookup_api(answer):
+    api = TikTokAPI.__new__(TikTokAPI)
+    api.API_URL = "https://www.tiktok.com/api-live/user/room/"
+    api.http_client = _LookupClient(answer)
+    api.tikrec_calls = []
+
+    def signed(user):
+        api.tikrec_calls.append(user)
+        return "tikrec-room"
+
+    api._signed_room_id_from_user = signed
+    return api
+
+
+def test_room_lookup_asks_tiktok_directly_without_signing():
+    user = {"roomId": "777", "status": 2, "nickname": "Ana", "avatarMedium": "a.jpg"}
+    api = _lookup_api(_JsonResponse({"statusCode": 0, "data": {"user": user}}))
+
+    assert api.get_room_id_from_user("ana") == "777"
+
+    url, params = api.http_client.calls[0]
+    assert url == "https://www.tiktok.com/api-live/user/room"
+    assert params["uniqueId"] == "ana" and params["aid"] == "1988"
+    assert api.last_user_info["nickname"] == "Ana"
+    assert api.tikrec_calls == []
+
+
+def test_room_lookup_unknown_user_needs_no_tikrec():
+    api = _lookup_api(
+        _JsonResponse(
+            {"statusCode": 19881007, "message": "user_not_found", "data": None}
+        )
+    )
+    assert api.get_room_id_from_user("nobody") is None
+    assert api.tikrec_calls == []
+
+
+def test_room_lookup_falls_back_to_tikrec_when_tiktok_refuses():
+    for answer in (
+        _JsonResponse("<html>Please wait...</html>"),  # WAF page
+        _JsonResponse({"statusCode": 10101, "data": None}),
+        _JsonResponse({}, status_code=403),
+        _JsonResponse({"statusCode": 0, "data": {"user": {}}}),  # no roomId key
+    ):
+        api = _lookup_api(answer)
+        assert api.get_room_id_from_user("ana") == "tikrec-room"
+        assert api.tikrec_calls == ["ana"]

@@ -457,6 +457,14 @@ def test_dashboard_shows_live_recording_info(client, app, tmp_path):
     statuses[channel_id]["flags"] = {"stream_missing": "audio"}
     assert "⚠ sin audio" in client.get("/partials/channels").text
 
+    statuses[channel_id] = {
+        "phase": "blocked",
+        "detail": "En vivo, pero TikTok rechaza la sesión: renová la cookie",
+        "flags": {},
+    }
+    text = client.get("/partials/channels").text
+    assert "No se puede grabar" in text and "renová la cookie" in text
+
 
 def test_settings_problem_alerts_toggle_and_session_health(client, app):
     from db import settings_repo

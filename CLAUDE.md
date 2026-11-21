@@ -378,6 +378,26 @@ copies of the `*.example` files.
 - `db/database.py` `_migrate` adds columns introduced after a table was
   first created (`_ADDED_COLUMNS`); add new columns there too, not only in
   schema.sql, or existing installs break.
+- Silent-loss guards (risk review 2026-11-21, all three asked by the user):
+  - "Live but can't record" is its own phase `blocked` ("No se puede
+    grabar"), not "offline": `LiveBlockedError(UserLiveError)` with
+    `reason` "restricted" (room info 4003110 and the page fallback failed:
+    age/region restriction without a working session - the user's cookie
+    expires almost daily) or "waf" (TikTok's block page). The worker shows
+    why and sends a Discord alert at once (`live_blocked:<channel>` /
+    `ip_blocked`, 2 h throttle); restricted + a configured session also
+    records the Settings "session rejected" notice. Before this, such lives
+    showed "Offline" and were never recorded, with no alert.
+  - Crash loops: `ChannelSupervisor` restarts a dead worker after
+    `RESTART_DELAYS` (0, 30 s, 2, 5, 15 min per consecutive death; a run
+    of 10 min resets it) instead of every 5 s, shows "se cayó N veces
+    seguidas" in the status and alerts on the 3rd death in a row
+    (`worker_crashing:<channel>`). The flipping phase used to keep the
+    30-min error alert from ever firing.
+  - `supervisor/canary.py`: every 10 min runs the real detection on
+    `HUB_CANARY_USER` (default weathernewslive, live 24/7; "" disables);
+    not seen live for 30 min -> one `detection_canary` alert ("la
+    detección de lives podría estar rota").
 - Supervisor restart triggers are only `username`, `mode`, `proxy`
   (`supervisor._TRACKED_FIELDS`). A restart stops the worker and cuts any
   ongoing recording, so settings that can change mid-live are read live

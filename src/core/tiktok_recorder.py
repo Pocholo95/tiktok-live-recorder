@@ -11,7 +11,12 @@ from core.participants import ParticipantTracker
 from core.stream_stats import StreamStats, stats_path
 from core.stream_watchdog import StreamWatchdog
 from core.tiktok_api import TikTokAPI
-from utils.custom_exceptions import LiveNotFound, TikTokRecorderError, UserLiveError
+from utils.custom_exceptions import (
+    LiveBlockedError,
+    LiveNotFound,
+    TikTokRecorderError,
+    UserLiveError,
+)
 from utils.enums import Error, Mode, TikTokError, TimeOut
 from utils.logger_manager import logger
 from utils.recorder_config import RecorderConfig
@@ -164,6 +169,18 @@ class TikTokRecorder:
                 self._report_profile()
                 self.manual_mode()
 
+            except LiveBlockedError as ex:
+                # Not "offline": TikTok won't let us watch (no working
+                # session for a restricted live, or our IP is blocked).
+                logger.warning(f"@{self.user}: {ex}")
+                self._on_status(
+                    "blocked",
+                    user=self.user,
+                    reason=ex.reason,
+                    has_session=bool((self._cookies or {}).get("sessionid_ss")),
+                )
+                self._wait(self.automatic_interval * TimeOut.ONE_MINUTE)
+
             except (UserLiveError, LiveNotFound) as ex:
                 logger.info(ex)
                 logger.info(
@@ -241,6 +258,18 @@ class TikTokRecorder:
                     f"Waiting {self.automatic_interval} minutes for the next check..."
                 )
                 self._on_status("offline", user=self.user)
+                self._wait(self.automatic_interval * TimeOut.ONE_MINUTE)
+
+            except LiveBlockedError as ex:
+                # Not "offline": TikTok won't let us watch (no working
+                # session for a restricted live, or our IP is blocked).
+                logger.warning(f"@{self.user}: {ex}")
+                self._on_status(
+                    "blocked",
+                    user=self.user,
+                    reason=ex.reason,
+                    has_session=bool((self._cookies or {}).get("sessionid_ss")),
+                )
                 self._wait(self.automatic_interval * TimeOut.ONE_MINUTE)
 
             except (UserLiveError, LiveNotFound) as ex:

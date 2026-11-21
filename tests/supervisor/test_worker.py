@@ -298,3 +298,38 @@ def test_worker_flags_missing_audio_and_alerts_when_watchdog_gives_up(
 
     worker._on_status("stream_missing", user="creator", kind=None)
     assert store.get(row["id"])["flags"] == {}
+
+
+def test_worker_shows_blocked_lives_and_alerts(tmp_path, monkeypatch):
+    from supervisor import alerts
+
+    sent = []
+    monkeypatch.setattr(
+        worker_module.alerts.discord_webhook,
+        "send_in_background",
+        lambda url, embed: sent.append((embed["title"], embed.get("description", ""))),
+    )
+    db_path = str(tmp_path / "hub.db")
+    init_db(db_path)
+    conn = get_connection(db_path)
+    settings_repo.set(
+        conn, "discord_webhook_url", "https://discord.com/api/webhooks/1/a"
+    )
+    store = ChannelStatusStore()
+    row = _channel_row(conn)
+    worker = worker_module.Worker(row, db_path, get_connection, tmp_path, store)
+
+    worker._on_status("blocked", user="creator", reason="restricted", has_session=True)
+
+    status = store.get(row["id"])
+    assert status["phase"] == "blocked" and "renová la cookie" in status["detail"]
+    assert sent[0][0].endswith("@creator está en vivo pero no se puede grabar")
+    assert "venció" in sent[0][1]
+    assert alerts.last_session_problem(conn)[1] == "creator"  # shown in Settings
+
+    worker._on_status("blocked", user="creator", reason="restricted", has_session=True)
+    assert len(sent) == 1  # throttled while it lasts
+
+    worker._on_status("blocked", user="creator", reason="waf")
+    assert store.get(row["id"])["detail"] == "TikTok bloqueó la IP del hub"
+    assert sent[-1][0].endswith("TikTok bloqueó la IP del hub")

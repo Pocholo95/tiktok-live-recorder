@@ -32,6 +32,7 @@ _PHASE_LABELS = {
     "idle": "En espera",
     "error": "Error",
     "stopped": "Pausado",
+    "blocked": "No se puede grabar",
 }
 
 

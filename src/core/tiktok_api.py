@@ -7,6 +7,7 @@ from http_utils.http_client import HttpClient
 from utils.enums import StatusCode, TikTokError
 from utils.logger_manager import logger
 from utils.custom_exceptions import (
+    LiveBlockedError,
     UserLiveError,
     TikTokRecorderError,
     LiveNotFound,
@@ -345,7 +346,7 @@ class TikTokAPI:
         content = response.text
 
         if not content or "Please wait" in content:
-            raise UserLiveError(TikTokError.WAF_BLOCKED)
+            raise LiveBlockedError(TikTokError.WAF_BLOCKED, "waf")
 
         data = response.json()
         user_info = (data.get("data") or {}).get("user", {}) or {}
@@ -485,7 +486,7 @@ class TikTokAPI:
                 if fallback_url and not _is_hls(fallback_url):
                     return [fallback_url]
 
-            raise UserLiveError(TikTokError.LIVE_RESTRICTION)
+            raise LiveBlockedError(TikTokError.LIVE_RESTRICTION, "restricted")
 
         room_data = data.get("data") or {}
         room_status = room_data.get("status")

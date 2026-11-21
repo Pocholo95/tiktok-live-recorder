@@ -88,6 +88,15 @@ def main():
     storyboards = StoryboardWorker(db_path, get_connection, ffmpeg_path=ffmpeg_path)
     storyboards.start()
 
+    # Canary: alerts if live detection stops working (TikTok changes).
+    from supervisor.canary import DetectionCanary
+
+    DetectionCanary(
+        db_path,
+        get_connection,
+        lambda: TikTokAPI(proxy=None, cookies=read_cookies()),
+    ).start()
+
     # Hourly: delete expired kept originals, daily hub.db backup.
     from supervisor.housekeeping import Housekeeping
 

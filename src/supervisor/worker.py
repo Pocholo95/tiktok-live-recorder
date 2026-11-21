@@ -183,6 +183,9 @@ class Worker:
             elif phase == "session_problem":
                 self._alert_session_problem(conn, data)
 
+            elif phase == "blocked":
+                self._blocked(conn, data)
+
             elif phase == "participants":
                 if self._current_recording_id is not None:
                     participants_repo.replace_for_recording(
@@ -234,6 +237,55 @@ class Worker:
             "varias veces. Se sigue grabando lo que llega; si vuelve, se retoma "
             "solo. El detalle queda en el diagnóstico de la grabación.",
             throttle_seconds=6 * 3600,
+        )
+
+    def _blocked(self, conn, data):
+        """The creator may be live but TikTok won't let us record it."""
+        user = data.get("user", self.username)
+        if data.get("reason") == "waf":
+            self._status_store.set(
+                self.channel_id,
+                phase="blocked",
+                detail="TikTok bloqueó la IP del hub",
+            )
+            alerts.send(
+                conn,
+                "ip_blocked",
+                "TikTok bloqueó la IP del hub",
+                f"Al revisar a @{user} TikTok respondió con su página de bloqueo "
+                "(WAF): mientras dure no se puede ver si alguien está en vivo ni "
+                "grabar. Suele pasar solo; si sigue, cambiá de IP o usá un proxy.",
+                throttle_seconds=2 * 3600,
+            )
+            return
+        has_session = bool(data.get("has_session"))
+        self._status_store.set(
+            self.channel_id,
+            phase="blocked",
+            detail=(
+                "En vivo, pero TikTok rechaza la sesión: renová la cookie"
+                if has_session
+                else "En vivo, pero TikTok pide una sesión: configurá la cookie"
+            ),
+        )
+        if has_session:
+            alerts.record_session_problem(conn, user)
+        alerts.send(
+            conn,
+            f"live_blocked:{self.channel_id}",
+            f"@{user} está en vivo pero no se puede grabar",
+            (
+                "TikTok no deja ver este live sin una sesión válida (restricción "
+                "de edad o de región) y "
+                + (
+                    "la configurada no sirve: probablemente venció. "
+                    if has_session
+                    else "no hay ninguna configurada. "
+                )
+                + "Pegá un `sessionid_ss` nuevo en Ajustes → Cookies: el hub lo "
+                "vuelve a intentar en cada revisión y graba apenas funcione."
+            ),
+            throttle_seconds=2 * 3600,
         )
 
     def _alert_session_problem(self, conn, data):

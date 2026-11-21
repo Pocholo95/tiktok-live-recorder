@@ -627,3 +627,41 @@ def test_watchdog_reconnect_switches_to_the_backup_cdn(tmp_path, monkeypatch):
     ]
     stats = json.loads(next(tmp_path.glob("*.stats.json")).read_text(encoding="utf-8"))
     assert [s.get("cdn") for s in stats["sources"]] == ["main", None]
+
+
+def test_blocked_live_is_reported_not_offline(monkeypatch):
+    from utils.custom_exceptions import LiveBlockedError
+
+    events = []
+    stop_event = Event()
+
+    class _BlockedAPI:
+        def get_room_id_from_user(self, user):
+            return "123"
+
+        last_user_info = {}
+
+        def is_room_alive(self, room_id):
+            return True  # check_alive says live; room info refuses (4003110)
+
+        def get_live_url_candidates(self, room_id, user=None):
+            raise LiveBlockedError("restricted", "restricted")
+
+    recorder = TikTokRecorder(
+        RecorderConfig(
+            mode=Mode.AUTOMATIC,
+            user="creator",
+            cookies={"sessionid_ss": "old"},
+            stop_event=stop_event,
+            on_status=lambda phase, **data: events.append((phase, data)),
+        )
+    )
+    recorder.tiktok = _BlockedAPI()
+    monkeypatch.setattr(recorder, "_wait", lambda seconds: stop_event.set())
+
+    recorder.automatic_mode()
+
+    phases = [phase for phase, _ in events]
+    assert "offline" not in phases
+    blocked = [data for phase, data in events if phase == "blocked"]
+    assert blocked == [{"user": "creator", "reason": "restricted", "has_session": True}]

@@ -12,6 +12,19 @@ class UserLiveError(TikTokRecorderError):
         super().__init__(message)
 
 
+class LiveBlockedError(UserLiveError):
+    """
+    TikTok won't let us watch: `reason` "restricted" (room info 4003110 -
+    age/region restriction and no working session) or "waf" (the hub's IP
+    is blocked). Unlike plain UserLiveError this is NOT "not live": the
+    creator may well be live and we're losing it.
+    """
+
+    def __init__(self, message, reason):
+        super().__init__(message)
+        self.reason = reason
+
+
 class IPBlockedByWAF(TikTokRecorderError):
     """Raised when IP is blocked by WAF."""
 

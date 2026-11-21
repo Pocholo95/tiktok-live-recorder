@@ -135,3 +135,56 @@ def test_reconcile_prunes_workers_that_died_on_their_own(tmp_path, monkeypatch):
     # channel is still enabled, so a fresh worker should replace the dead one
     assert len(_FakeWorker.instances) == 2
     assert _FakeWorker.instances[1].started is True
+
+
+def test_crash_loops_back_off_and_alert(tmp_path, monkeypatch):
+    from db import settings_repo
+
+    _FakeWorker.instances = []
+    monkeypatch.setattr(supervisor_module, "_Worker", _FakeWorker)
+    sent = []
+    monkeypatch.setattr(
+        supervisor_module.alerts.discord_webhook,
+        "send_in_background",
+        lambda url, embed: sent.append(embed["title"]),
+    )
+    db_path = str(tmp_path / "hub.db")
+    init_db(db_path)
+    conn = get_connection(db_path)
+    settings_repo.set(
+        conn, "discord_webhook_url", "https://discord.com/api/webhooks/1/a"
+    )
+    channel_id = channels_repo.insert(conn, username="alice", mode=Mode.AUTOMATIC)
+    now = [1000.0]
+    sup = supervisor_module.ChannelSupervisor(db_path, tmp_path, clock=lambda: now[0])
+
+    def crash(after):
+        now[0] += after
+        sup.status.set(channel_id, phase="error", detail="boom")
+        _FakeWorker.instances[-1]._alive = False
+        sup._reconcile_once()
+
+    sup._reconcile_once()
+    crash(after=1)  # 1st crash: restarted right away, like before
+    assert len(_FakeWorker.instances) == 2
+
+    crash(after=1)  # 2nd in a row: waits 30 s
+    assert len(_FakeWorker.instances) == 2
+    assert "se cayó 2 veces seguidas" in sup.status.get(channel_id)["detail"]
+    now[0] += 29
+    sup._reconcile_once()
+    assert len(_FakeWorker.instances) == 2
+    now[0] += 1
+    sup._reconcile_once()
+    assert len(_FakeWorker.instances) == 3
+
+    assert sent == []
+    crash(after=1)  # 3rd in a row: Discord alert, waits 2 min
+    assert len(sent) == 1 and "alice" in sent[0]
+    now[0] += 120
+    sup._reconcile_once()
+    assert len(_FakeWorker.instances) == 4
+
+    # A worker that ran fine for a while starts the count over.
+    crash(after=supervisor_module.HEALTHY_RUN_SECONDS)
+    assert len(_FakeWorker.instances) == 5

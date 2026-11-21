@@ -96,6 +96,7 @@ table.channels-table {
 .status-checking { background: var(--accent); color: #fff; }
 .status-offline { background: var(--border); color: var(--muted); }
 .status-error { background: var(--error); color: #fff; }
+.status-blocked { background: var(--warn); color: #14161b; }
 .status-stopped { background: transparent; border: 1px solid var(--border); }
 .status-completed { background: var(--ok); color: #14161b; }
 .status-failed { background: var(--error); color: #fff; }

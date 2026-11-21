@@ -355,3 +355,14 @@ def test_room_lookup_falls_back_to_tikrec_when_tiktok_refuses():
         api = _lookup_api(answer)
         assert api.get_room_id_from_user("ana") == "tikrec-room"
         assert api.tikrec_calls == ["ana"]
+
+
+def test_restricted_room_raises_blocked_not_offline():
+    from utils.custom_exceptions import LiveBlockedError
+
+    api = build_api({"data": {}, "status_code": 4003110})
+    api._get_stream_url_from_page = lambda user: None
+
+    with pytest.raises(LiveBlockedError) as error:
+        api.get_live_url_candidates("123", user="creator")
+    assert error.value.reason == "restricted"

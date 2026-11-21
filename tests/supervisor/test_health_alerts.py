@@ -226,3 +226,21 @@ def test_reconnect_grace_setting_defaults_and_bounds(tmp_path):
     assert worker_module.reconnect_grace_seconds(conn) == 1800
     settings_repo.set(conn, worker_module.RECONNECT_GRACE_KEY, "junk")
     assert worker_module.reconnect_grace_seconds(conn) == 300
+
+
+def test_open_files_alert_near_the_limit(tmp_path, monkeypatch):
+    sent = _capture(monkeypatch)
+    db_path, conn = _db(tmp_path)
+    monitor = health.HealthMonitor(db_path, get_connection, ChannelStatusStore())
+
+    monitor._check_open_files(conn, usage=(500, 1024))
+    assert sent == []
+    monitor._check_open_files(conn, usage=(900, 1024))
+    assert len(sent) == 1 and "archivos abiertos" in sent[0]
+    monitor._check_open_files(conn, usage=(1000, 1024))
+    assert len(sent) == 1  # throttled
+
+
+def test_open_files_is_readable_or_skipped():
+    usage = health.open_files()
+    assert usage is None or (usage[0] > 0 and usage[1] > 0)

@@ -22,6 +22,22 @@ from utils.logger_manager import logger
 CHECK_SECONDS = 60
 ERROR_MINUTES = 30
 STALL_MINUTES = 5
+# Alert when the process uses this share of its open-file limit: at 100 %
+# it can't accept connections and the whole hub freezes (2026-11-21).
+OPEN_FILES_ALERT_RATIO = 0.8
+
+
+def open_files():
+    """(open file descriptors, soft limit) of this process, or None where
+    it can't be read (not Linux)."""
+    try:
+        import resource
+
+        count = len(os.listdir("/proc/self/fd"))
+        soft, _hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    except (ImportError, OSError):
+        return None
+    return count, soft
 
 
 class HealthMonitor:
@@ -63,6 +79,7 @@ class HealthMonitor:
         conn = self._get_connection(self._db_path)
         try:
             names = {row["id"]: row["username"] for row in channels_repo.list_all(conn)}
+            self._check_open_files(conn)
             for channel_id, status in statuses.items():
                 user = names.get(channel_id, f"canal {channel_id}")
                 if status["phase"] == "error":
@@ -73,6 +90,24 @@ class HealthMonitor:
                     self._growth.pop(channel_id, None)
         finally:
             conn.close()
+
+    def _check_open_files(self, conn, usage=None):
+        usage = usage or open_files()
+        if not usage:
+            return
+        count, limit = usage
+        if limit <= 0 or count < limit * OPEN_FILES_ALERT_RATIO:
+            return
+        logger.warning(f"Open files: {count} of {limit}")
+        alerts.send(
+            conn,
+            "open_files",
+            "El hub está por quedarse sin archivos abiertos",
+            f"Tiene {count} de {limit} abiertos. Al llegar al límite deja de "
+            "responder y hay que reiniciarlo. Avisale a quien mantiene el hub "
+            "y, si podés, subí el límite con `ulimits: nofile` en el compose.",
+            throttle_seconds=6 * 3600,
+        )
 
     def _check_error(self, conn, channel_id, user, status, now):
         minutes = (now - status["since"]) / 60

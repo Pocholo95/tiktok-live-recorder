@@ -21,3 +21,9 @@ services:
     # Gives recordings in progress time to flush and close their .ts file
     # before Docker sends SIGKILL.
     stop_grace_period: 60s
+    # Every streamed video holds a file descriptor while it's sent; the
+    # default 1024 ran out once (2026-11-21) and froze the hub.
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536

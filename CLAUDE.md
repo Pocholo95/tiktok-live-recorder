@@ -150,6 +150,17 @@ copies of the `*.example` files.
   `pagehide`. Server side was fine (Range 206, ~110 MB/s, faststart, GOP
   2 s, h2 at the proxy); seeking in a 2.6 h MP4 still takes ~1-1.5 s in
   the browser.
+- Hub froze on "Too many open files" (2026-11-21, ulimit 1024 in the
+  container): Starlette 1.6.0's `FileResponse` ignored client disconnects
+  (uvicorn sends ASGI spec 2.3), so every range request the browser
+  abandoned on a seek kept reading the MP4 to the end - on the NAS HDD
+  hundreds piled up (each holding the MP4 + hub.db + hub.db-wal fds).
+  That also explains the earlier "3 MB/s" buffering. Fixed by Starlette
+  1.10 in uv.lock (test: `tests/web/test_media_disconnect.py`, fails on
+  1.6.0), streaming endpoints read the row with `_lookup` instead of
+  holding `Depends(get_db)` for the whole response, the health monitor
+  alerts on Discord at 80 % of the fd limit, and the compose example sets
+  `ulimits: nofile` to 65536. The 60 s restart was `stop_grace_period`.
 - Custom player controls (user chose own controls over Plyr, 2026-11-20):
   `static/player.js` `initPlayer(#player)`, called from
   library_player.html on every render (tears down the previous instance;

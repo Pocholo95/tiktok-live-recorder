@@ -31,14 +31,29 @@ _MEDIA_TYPES = {
 _BROWSER_VIDEO_CODECS = {"h264", "av1", "vp9"}
 
 
+def _lookup(request, recording_id):
+    """
+    The recording row, read with a connection that is closed right away.
+    Endpoints that stream a file use this instead of `Depends(get_db)`,
+    whose connection stays open until the whole response is sent - for a
+    video that's minutes, and every open one also holds hub.db file
+    descriptors.
+    """
+    conn = get_connection(request.app.state.db_path)
+    try:
+        return recordings_repo.get(conn, recording_id)
+    finally:
+        conn.close()
+
+
 @router.get("/media/{recording_id}")
-def get_media(recording_id: int, db=Depends(get_db)):
+def get_media(recording_id: int, request: Request):
     """
     Serves a recording by DB id only - never a client-supplied path, so
     there's no path-traversal surface. FileResponse already handles HTTP
     Range requests, which is what lets <video> scrub/seek in the browser.
     """
-    recording = recordings_repo.get(db, recording_id)
+    recording = _lookup(request, recording_id)
     if recording is None:
         raise HTTPException(status_code=404, detail="Recording not found")
 
@@ -51,10 +66,10 @@ def get_media(recording_id: int, db=Depends(get_db)):
 
 
 @router.get("/media/{recording_id}/download")
-def download_media(recording_id: int, db=Depends(get_db)):
+def download_media(recording_id: int, request: Request):
     """Same file as /media/{id}, but forces a "Save As" download with a
     real filename instead of playing inline."""
-    recording = recordings_repo.get(db, recording_id)
+    recording = _lookup(request, recording_id)
     if recording is None:
         raise HTTPException(status_code=404, detail="Recording not found")
 
@@ -66,9 +81,9 @@ def download_media(recording_id: int, db=Depends(get_db)):
 
 
 @router.get("/media/{recording_id}/original")
-def download_original(recording_id: int, db=Depends(get_db)):
+def download_original(recording_id: int, request: Request):
     """The raw .ts a conversion replaced, while it's still kept."""
-    path = originals.available(recordings_repo.get(db, recording_id))
+    path = originals.available(_lookup(request, recording_id))
     if path is None:
         raise HTTPException(status_code=404, detail="Original not kept")
     return FileResponse(path, filename=path.name)
@@ -147,8 +162,8 @@ def get_storyboard(recording_id: int, db=Depends(get_db)):
 
 
 @router.get("/media/{recording_id}/storyboard/{sheet}.jpg")
-def get_storyboard_sheet(recording_id: int, sheet: int, db=Depends(get_db)):
-    recording = recordings_repo.get(db, recording_id)
+def get_storyboard_sheet(recording_id: int, sheet: int, request: Request):
+    recording = _lookup(request, recording_id)
     if recording is None or not 1 <= sheet <= 999:
         raise HTTPException(status_code=404, detail="Not found")
     path = storyboards.storyboard_dir(recording["file_path"]) / f"sheet_{sheet:03d}.jpg"
@@ -160,8 +175,8 @@ def get_storyboard_sheet(recording_id: int, sheet: int, db=Depends(get_db)):
 
 
 @router.get("/media/{recording_id}/thumbnail")
-def get_thumbnail(recording_id: int, db=Depends(get_db)):
-    recording = recordings_repo.get(db, recording_id)
+def get_thumbnail(recording_id: int, request: Request):
+    recording = _lookup(request, recording_id)
     thumbnail_path = recording["thumbnail_path"] if recording else None
 
     if thumbnail_path and Path(thumbnail_path).is_file():

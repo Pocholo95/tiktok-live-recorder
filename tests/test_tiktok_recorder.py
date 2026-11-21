@@ -513,3 +513,52 @@ def test_guest_times_follow_the_video_clock_across_a_cut(tmp_path, monkeypatch):
     assert tracker.clock_at_start == 0
     assert tracker.clock_at_stop == 4.0  # 2 chunks of video, not 90+ s of wall time
     assert finished["media_seconds"] == 4
+
+
+def test_stream_watchdog_drops_the_connection_and_reports_it(tmp_path, monkeypatch):
+    events = []
+    _FakeRemuxer.instances.clear()
+    monkeypatch.setattr("core.tiktok_recorder.TsRemuxer", _FakeRemuxer)
+
+    class _Watchdog:
+        """Asks for one reconnect, then reports the audio is back."""
+
+        def __init__(self, stats):
+            self.events = [
+                {"action": "reconnect", "kind": "audio", "attempt": 1},
+                {"action": "recovered", "kind": "audio", "attempt": 1},
+            ]
+
+        def check(self):
+            return self.events.pop(0) if self.events else None
+
+    monkeypatch.setattr("core.tiktok_recorder.StreamWatchdog", _Watchdog)
+
+    class _API(_StreamingFakeTikTokAPI):
+        def is_room_alive(self, room_id):
+            self._room_alive_calls += 1
+            return self._room_alive_calls <= 2
+
+    recorder = TikTokRecorder(
+        RecorderConfig(
+            mode=Mode.MANUAL,
+            user="creator",
+            room_id="1234567890",
+            cookies={},
+            output=str(tmp_path),
+            on_status=lambda phase, **data: events.append((phase, data)),
+        )
+    )
+    recorder.tiktok = _API(stream_chunks=[b"x" * 5000, b"y" * 5000])
+
+    recorder.start_recording("creator", "1234567890")
+
+    remuxer = _FakeRemuxer.instances[-1]
+    # The first connection was dropped after its first chunk.
+    assert remuxer.connections == 2
+    assert remuxer.chunks == [b"x" * 5000, b"x" * 5000, b"y" * 5000]
+    missing = [data for phase, data in events if phase == "stream_missing"]
+    assert missing == [
+        {"user": "creator", "kind": "audio"},
+        {"user": "creator", "kind": None},
+    ]

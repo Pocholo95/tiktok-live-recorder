@@ -9,6 +9,7 @@ from core.flv_stream import TsRemuxer
 from core.layout import LayoutTracker
 from core.participants import ParticipantTracker
 from core.stream_stats import StreamStats, stats_path
+from core.stream_watchdog import StreamWatchdog
 from core.tiktok_api import TikTokAPI
 from utils.custom_exceptions import LiveNotFound, TikTokRecorderError, UserLiveError
 from utils.enums import Error, Mode, TikTokError, TimeOut
@@ -254,6 +255,29 @@ class TikTokRecorder:
                 logger.error(Error.CONNECTION_CLOSED_AUTOMATIC)
                 self._wait(TimeOut.CONNECTION_CLOSED * TimeOut.ONE_MINUTE)
 
+    def _on_watchdog(self, user, event):
+        """Acts on a StreamWatchdog event; True = drop this connection."""
+        kind, action = event["kind"], event["action"]
+        label = "audio" if kind == "audio" else "video"
+        if action == "reconnect":
+            logger.warning(
+                f"@{user}: TikTok stopped sending {label}; reconnecting "
+                f"(attempt {event['attempt']})..."
+            )
+            if event["attempt"] == 1:
+                self._on_status("stream_missing", user=user, kind=kind)
+            return True
+        if action == "give_up":
+            logger.warning(
+                f"@{user}: still no {label} after {event['attempt']} reconnects; "
+                "recording what arrives."
+            )
+            self._on_status("stream_missing", user=user, kind=kind, gave_up=True)
+        elif action == "recovered":
+            logger.info(f"@{user}: {label} is back.")
+            self._on_status("stream_missing", user=user, kind=None)
+        return False
+
     def _build_output_path(self, user: str) -> str:
         filename = (
             f"TK_{user}_{time.strftime('%Y.%m.%d_%H-%M-%S', time.localtime())}.ts"
@@ -403,6 +427,7 @@ class TikTokRecorder:
             # happens on this machine; the MP4 is made offline on a GPU.
             layout = self._layout
             stats = StreamStats(stats_path(output))
+            watchdog = StreamWatchdog(stats)
             remuxer = TsRemuxer(
                 output,
                 ffmpeg_path=self.ffmpeg_path,
@@ -442,6 +467,10 @@ class TikTokRecorder:
                             remuxer.write(chunk)
                             bytes_written += len(chunk)
                             stats.maybe_save()
+
+                            event = watchdog.check()
+                            if event is not None and self._on_watchdog(user, event):
+                                break  # reconnect: the loop above opens a new one
 
                             elapsed_time = time.time() - start_time
                             if self.duration and elapsed_time >= self.duration:

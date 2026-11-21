@@ -265,3 +265,36 @@ def test_worker_stores_video_duration_not_wall_time(tmp_path, monkeypatch):
 
     recordings = recordings_repo.list_filtered(conn, channel_id=channel_row["id"])
     assert recordings[0]["duration_seconds"] == 1234
+
+
+def test_worker_flags_missing_audio_and_alerts_when_watchdog_gives_up(
+    tmp_path, monkeypatch
+):
+    sent = []
+    monkeypatch.setattr(
+        worker_module.alerts.discord_webhook,
+        "send_in_background",
+        lambda url, embed: sent.append(embed["title"]),
+    )
+    db_path = str(tmp_path / "hub.db")
+    init_db(db_path)
+    conn = get_connection(db_path)
+    settings_repo.set(
+        conn, "discord_webhook_url", "https://discord.com/api/webhooks/1/a"
+    )
+    store = ChannelStatusStore()
+    row = _channel_row(conn)
+    worker = worker_module.Worker(row, db_path, get_connection, tmp_path, store)
+    store.set(row["id"], phase="recording")
+
+    worker._on_status("stream_missing", user="creator", kind="audio")
+    assert store.get(row["id"])["flags"] == {"stream_missing": "audio"}
+    assert sent == []  # still trying to reconnect: no alert yet
+
+    worker._on_status("stream_missing", user="creator", kind="audio", gave_up=True)
+    assert len(sent) == 1 and sent[0].endswith(
+        "El live de @creator se está grabando sin audio"
+    )
+
+    worker._on_status("stream_missing", user="creator", kind=None)
+    assert store.get(row["id"])["flags"] == {}

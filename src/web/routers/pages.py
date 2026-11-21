@@ -84,6 +84,7 @@ def _live_info(db, channel_id, status):
         "waiting_seconds": max(0, int(waiting_until - time.time()))
         if waiting_until
         else None,
+        "stream_missing": flags.get("stream_missing"),
         "stalled_minutes": int((time.time() - stalled_since) / 60)
         if stalled_since is not None
         else None,

@@ -76,6 +76,7 @@ def test_audio_gap_reconnects_and_config_changes_are_counted(tmp_path):
         "video_gaps": 0,
         "reconnects": 1,
         "ffmpeg_restarts": 0,
+        "watchdog_reconnects": 0,
     }
 
 

@@ -37,6 +37,7 @@
       </a>
       {% if channel.live.guests %}<span class="live-info-guests">con @{{ channel.live.guests | join(", @") }}</span>{% endif %}
       {% if channel.live.waiting_seconds is not none %}<span class="live-info-waiting">⏳ cortó el live · esperando que vuelva ({{ (channel.live.waiting_seconds // 60) }}:{{ "%02d" | format(channel.live.waiting_seconds % 60) }})</span>{% endif %}
+      {% if channel.live.stream_missing %}<span class="live-info-stalled" title="TikTok dejó de mandar el {{ channel.live.stream_missing }}: el hub reconecta solo para intentar recuperarlo">⚠ sin {{ channel.live.stream_missing }}</span>{% endif %}
       {% if channel.live.stalled_minutes is not none %}<span class="live-info-stalled">⚠ sin datos nuevos hace {{ channel.live.stalled_minutes }} min</span>{% endif %}
     </div>
     {% elif channel.detail and channel.phase != "recording" %}<br><small>{{ channel.detail }}</small>{% endif %}

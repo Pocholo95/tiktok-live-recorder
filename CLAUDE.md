@@ -78,6 +78,17 @@ copies of the `*.example` files.
   audio bytes per minute. The library header warns "sin audio/video al
   grabar" and links the JSON ("diagnóstico"). Ask the user for it when a
   recording looks broken.
+- Stream watchdog (`core/stream_watchdog.py`, built 2026-11-20): after
+  each chunk it reads the StreamStats counts; audio missing for 45 s of
+  video (video missing: 120 s, since a paused live also stops video) while
+  the other stream flows -> the recorder drops the connection and the
+  normal reconnect path opens a new one into the same file. Retries after
+  120 s / 300 s / 300 s more of video, then gives up (keeps recording,
+  Discord problem alert `stream_missing:<recording>:<kind>`). Status flag
+  `stream_missing` shows "⚠ sin audio" on the dashboard from the first
+  attempt until it's back. Attempts are logged in the stats file
+  (`watchdog`). A muted mic still sends frames, so it never trips.
+  `download_live_stream` closes the HTTP response when the loop breaks.
 - Daily `hub.db` backup (`supervisor/backups.py`, SQLite backup API) to
   `HUB_BACKUP_DIR` (default `OUTPUT_DIR/backups`, same disk) as
   `hub-YYYY-MM-DD.db` (UTC date), newest 14 kept.
@@ -321,14 +332,6 @@ Agreed but not built yet. Move items out of here when they ship.
     durations differ by more than `max(10 s, 2 %)`.
   - [ ] Browser: if the dropped file isn't named `<raw stem>.mp4`, ask for
     confirmation before uploading (warning, not a block).
-- **Audio/video watchdog** (agreed 2026-11-20, user chose to do kept
-  originals + stream stats + backups first). With the StreamStats counts:
-  no audio (or no video) for ~30-60 s of video while the other keeps
-  arriving -> force a reconnect (same path as a dropped connection, the
-  normalizer splices it, ~2-5 s lost). Backoff (e.g. 2 min, 5 min), give
-  up after 2-3 tries, keep recording what arrives and send a Discord
-  problem alert. Don't reconnect on video missing during a paused live.
-  Log each attempt in the stats file.
 - **Conversion checks** (discussed 2026-11-20, after real stats data):
   on upload, compare audio vs video stream duration and the raw's
   duration; measure long silences on the PC during conversion

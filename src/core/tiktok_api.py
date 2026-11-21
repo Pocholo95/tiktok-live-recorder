@@ -434,6 +434,11 @@ class TikTokAPI:
     def download_live_stream(self, live_url: str):
         """Generator that returns the live stream for a given room_id."""
         stream = self._http_client_stream.get(live_url, stream=True)
-        for chunk in stream.iter_content(chunk_size=4096):
-            if chunk:
-                yield chunk
+        try:
+            for chunk in stream.iter_content(chunk_size=4096):
+                if chunk:
+                    yield chunk
+        finally:
+            # The recorder may stop reading mid-stream (stop, or the stream
+            # watchdog asking for a fresh connection): free the socket now.
+            stream.close()

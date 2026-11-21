@@ -60,6 +60,9 @@ def summary(stats):
         "video_gaps": len(stats.get("video", {}).get("gaps", [])),
         "reconnects": max(0, len(stats.get("connections", [])) - 1),
         "ffmpeg_restarts": len(stats.get("ffmpeg_restarts", [])),
+        "watchdog_reconnects": sum(
+            1 for e in stats.get("watchdog", []) if e.get("action") == "reconnect"
+        ),
     }
 
 
@@ -80,6 +83,7 @@ class StreamStats:
         self._connections = []
         self._config_changes = []
         self._ffmpeg_restarts = []
+        self._watchdog = []  # core/stream_watchdog.py attempts
 
     def connection(self):
         """A (re)connection to TikTok is about to feed bytes."""
@@ -117,6 +121,26 @@ class StreamStats:
         bucket[index] += 1
         bucket[index + 1] += size
 
+    @property
+    def media_seconds(self):
+        return self._media_ms / 1000
+
+    def missing_seconds(self, name):
+        """How long (on the video timeline) since `name` ("audio"/"video")
+        last arrived. Only grows while the other stream keeps arriving."""
+        kind = AUDIO if name == "audio" else VIDEO
+        last = self._streams[kind]["last_ms"]
+        return (self._media_ms - (last if last is not None else 0)) / 1000
+
+    def watchdog(self, event):
+        self._watchdog.append(
+            {
+                **event,
+                "at": round(self._media_ms / 1000, 1),
+                "wall": round(self._clock(), 1),
+            }
+        )
+
     def ffmpeg_restart(self, detail):
         self._ffmpeg_restarts.append(
             {"at": round(self._media_ms / 1000, 1), "detail": str(detail)[:300]}
@@ -148,6 +172,7 @@ class StreamStats:
         result["connections"] = self._connections
         result["config_changes"] = self._config_changes
         result["ffmpeg_restarts"] = self._ffmpeg_restarts
+        result["watchdog"] = self._watchdog
         result["minutes"] = [[m, *v] for m, v in sorted(self._minutes.items())]
         result["minutes_columns"] = [
             "minute",

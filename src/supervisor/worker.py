@@ -125,6 +125,22 @@ class Worker:
             self._status_store.set_flag(self.channel_id, "waiting_return_until", None)
             return
 
+        if phase == "stream_missing":
+            # The stream watchdog (core/stream_watchdog.py): TikTok stopped
+            # sending audio/video. Shown on the dashboard while it lasts; a
+            # problem alert only once it gave up reconnecting.
+            kind = data.get("kind")
+            self._status_store.set_flag(self.channel_id, "stream_missing", kind)
+            if kind and data.get("gave_up"):
+                conn = self._get_connection(self._db_path)
+                try:
+                    self._alert_stream_missing(
+                        conn, data.get("user", self.username), kind
+                    )
+                finally:
+                    conn.close()
+            return
+
         if phase == "profile":
             # Arrives on every check (every few minutes); the avatar barely
             # changes, so refresh it at most a few times a day.
@@ -207,6 +223,18 @@ class Worker:
             return settings_repo.get(conn, participants.SETTING_KEY)
         finally:
             conn.close()
+
+    def _alert_stream_missing(self, conn, user, kind):
+        what = "audio" if kind == "audio" else "video"
+        alerts.send(
+            conn,
+            f"stream_missing:{self._current_recording_id or self.channel_id}:{kind}",
+            f"El live de @{user} se está grabando sin {what}",
+            f"TikTok dejó de mandar el {what} y no volvió después de reconectar "
+            "varias veces. Se sigue grabando lo que llega; si vuelve, se retoma "
+            "solo. El detalle queda en el diagnóstico de la grabación.",
+            throttle_seconds=6 * 3600,
+        )
 
     def _alert_session_problem(self, conn, data):
         user = data.get("user", self.username)

@@ -258,6 +258,11 @@ copies of the `*.example` files.
   downloaded to `OUTPUT_DIR/avatars/` (TikTok CDN URLs expire), row in the
   `profiles` table, served by `/avatars/{username}`. The `avatar` macro
   shows the initial underneath and drops the <img> on error.
+  Guests/co-hosts get theirs too (user request 2026-11-21):
+  `supervisor/guest_profiles.py` asks the unsigned user/room API once per
+  username (one thread, 3 s apart, skipped if the profile is < 7 days old),
+  fed by the worker on every guest-list change and at startup with every
+  guest already in `recording_participants`; same avatars folder/table.
 - Guest/co-host names (best-effort, hub mode only): `core/participants.py`
   polls room info every 30 s while recording (`link_mic.rival_anchor_id`
   for a linked co-host, `linked_user_list` / `show_user_list` for

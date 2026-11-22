@@ -6,7 +6,7 @@ from core import participants
 from core.tiktok_recorder import TikTokRecorder
 from db import channels_repo, participants_repo, recordings_repo, settings_repo
 from notify import discord_webhook
-from supervisor import alerts, profiles, schedules
+from supervisor import alerts, guest_profiles, profiles, schedules
 from supervisor.thumbnails import generate_thumbnail
 from utils.enums import Mode
 from utils.logger_manager import logger
@@ -199,6 +199,9 @@ class Worker:
                     participants_repo.replace_for_recording(
                         conn, self._current_recording_id, data.get("participants") or []
                     )
+                guest_profiles.want(
+                    p.get("username") for p in data.get("participants") or []
+                )
 
             elif phase == "recording_finished":
                 self._finish_recording(conn, **data)

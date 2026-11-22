@@ -109,6 +109,22 @@ def main():
     finally:
         _conn.close()
 
+    # Guest/co-host profile pictures (the creators' come from live checks).
+    from supervisor import guest_profiles
+
+    _guest_profiles = guest_profiles.GuestProfiles(
+        db_path,
+        get_connection,
+        output_dir,
+        lambda: TikTokAPI(proxy=None, cookies=read_cookies()),
+    )
+    guest_profiles.install(_guest_profiles)
+    threading.Thread(
+        target=_guest_profiles.want_all_known_guests,
+        name="guest-profiles-backfill",
+        daemon=True,
+    ).start()
+
     # Hourly: delete expired kept originals, daily hub.db backup.
     from supervisor.housekeeping import Housekeeping
 

@@ -540,6 +540,10 @@ def test_smart_interval_toggle_and_dashboard_indicator(client, app):
     text = client.get("/partials/channels").text
     assert "ahora cada" in text  # learned: shows the effective interval
 
+    channels_repo.set_enabled(conn, channel_id, False)  # paused: never checked
+    assert "ahora cada" not in client.get("/partials/channels").text
+    channels_repo.set_enabled(conn, channel_id, True)
+
     client.post(f"/channels/{channel_id}/smart")
     assert channels_repo.get(conn, channel_id)["smart_interval"] == 0
 

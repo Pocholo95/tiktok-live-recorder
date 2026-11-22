@@ -14,7 +14,8 @@
         hx-swap="outerHTML">
       <span class="muted">min</span>
     </label>
-    {% if channel.interval_now and channel.phase != "recording" %}
+    {# Paused channels aren't checked at all: no interval to show. #}
+    {% if channel.interval_now and channel.enabled and channel.phase != "recording" %}
     {% set i = channel.interval_now %}
     <div class="smart-now smart-{{ i.reason }}">
       {% if i.reason == "learning" %}

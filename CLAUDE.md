@@ -451,6 +451,18 @@ Agreed but not built yet. Move items out of here when they ship.
   comes from TikTok or from `FlvNormalizer`'s discontinuity handling
   (a lone audio jump > `_MAX_FORWARD_MS` resets the shared offset); the
   new `.stats.json` will show the next one.
+- **Audio-only stream as an audio backup** (idea from the user
+  2026-11-21, waiting for data): instead of reconnecting when audio goes
+  missing (costs 2-5 s of video), open the `ao` variant (`only_audio=1`,
+  served from the source without re-encoding) in parallel and use its
+  audio for the gap - e.g. a sidecar `.audio.ts` the PC splices in when
+  converting. Open questions: does `ao` still have audio when the main
+  variant lost it (useless if the loss is upstream), and do its
+  timestamps share the main variant's clock. The user is first checking
+  whether the current reconnect fixes real cases (stats `watchdog`
+  events: "reconnect" then "recovered"). If not, add a probe: on missing
+  audio, read `ao` a few seconds and log whether it has audio and its
+  timestamps, without changing anything else.
 - **Conversion checks** (discussed 2026-11-20, after real stats data):
   on upload, compare audio vs video stream duration and the raw's
   duration; measure long silences on the PC during conversion

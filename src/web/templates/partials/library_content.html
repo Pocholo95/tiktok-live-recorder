@@ -30,6 +30,9 @@
     <select data-convert-opt="quality" aria-label="Calidad">
       {% for key, label in convert_qualities.items() %}<option value="{{ key }}">Calidad {{ label | lower }}</option>{% endfor %}
     </select>
+    <label class="convert-bar-check" title="Escribe el @ de cada persona sobre su cuadro cuando hay invitados. Queda grabado en el MP4: no se puede sacar después.">
+      <input type="checkbox" data-convert-opt="names"> Poner los @
+    </label>
     <button type="button" class="btn" data-copy-cmd title="Pegalo en PowerShell: se descargan, se convierten con tu GPU y se suben solas">Copiar comando</button>
     <details class="convert-bar-cmd">
       <summary>ver comando</summary>

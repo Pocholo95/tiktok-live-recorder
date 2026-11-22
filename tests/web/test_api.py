@@ -174,3 +174,44 @@ def test_api_convert_args_with_storyboard_for_a_recording(client, app):
     plain = client.get("/api/convert/args").json()
     assert plain["storyboard"] is None and "-vf" in plain["args"]
     assert client.get("/api/convert/args?recording_id=999").status_code == 404
+
+
+def test_names_option_adds_the_subtitle_filter_before_scaling():
+    args = convert.ffmpeg_args("in.ts", "out.mp4", {"names": True}, names_file="n.ass")
+    assert args[args.index("-vf") + 1].startswith("ass=n.ass,scale=")
+    plain = convert.ffmpeg_args("in.ts", "out.mp4", {"names": True})
+    assert "ass=" not in plain[plain.index("-vf") + 1]
+    text = convert.command_text("TK_a.ts", {"names": True})
+    assert "ass=TK_a.names.ass,scale=" in text
+    assert "ass=" not in convert.command_text(
+        "TK_a.ts", {"names": True}, scope="folder"
+    )
+
+
+def test_api_convert_args_with_names(client, app, tmp_path):
+    raw = tmp_path / "TK_a.ts"
+    raw.write_bytes(b"")
+    raw.with_suffix(".layout.jsonl").write_text(
+        '{"t": 0, "grids": [{"cid": "1", "host": true, "box": [0, 0, 0.5, 1]},'
+        ' {"cid": "2", "host": false, "box": [0.5, 0, 0.5, 1]}]}\n'
+    )
+    rid = _recording(app, str(raw), "ts")
+
+    data = client.get(f"/api/convert/args?recording_id={rid}&names=1").json()
+    assert data["names"] == {"url": f"/recordings/{rid}/names.ass", "labels": 1}
+    assert data["args"][data["args"].index("-vf") + 1].startswith("ass={names},")
+    ass = client.get(data["names"]["url"])
+    assert ass.status_code == 200 and "@creator" in ass.text
+    assert "TK_a.names.ass" in ass.headers["content-disposition"]
+
+    without = client.get(f"/api/convert/args?recording_id={rid}").json()
+    assert without["names"] is None and not any("ass=" in a for a in without["args"])
+    cmd = client.get(f"/api/convert/command?recording_id={rid}&names=1").json()
+    assert cmd["names"]["file_name"] == "TK_a.names.ass"
+    assert "ass=TK_a.names.ass" in cmd["command"]
+
+
+def test_script_has_the_names_switch(client):
+    script = client.get("/tools/convert-pending.ps1?inline=1").text
+    assert "[switch]$Names" in script and "&names=1" in script
+    assert "Push-Location $WorkDir" in script

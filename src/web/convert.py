@@ -31,20 +31,37 @@ _QUALITY_VALUE = {
     "libx264": {"high": 20, "normal": 23, "light": 27},
 }
 
-DEFAULTS = {"encoder": "h264_nvenc", "size": "720x1280", "quality": "normal"}
+DEFAULTS = {
+    "encoder": "h264_nvenc",
+    "size": "720x1280",
+    "quality": "normal",
+    "names": False,
+}
 
 
-def normalize(encoder=None, size=None, quality=None):
-    """Valid options, falling back to the defaults for anything unknown."""
+def normalize(encoder=None, size=None, quality=None, names=False):
+    """Valid options, falling back to the defaults for anything unknown.
+    `names`: put each person's @ on their panel (supervisor/names_overlay)."""
     return {
         "encoder": encoder if encoder in ENCODERS else DEFAULTS["encoder"],
         "size": size if size in SIZES else DEFAULTS["size"],
         "quality": quality if quality in QUALITIES else DEFAULTS["quality"],
+        "names": names in (True, 1, "1", "true", "on"),
     }
 
 
-def ffmpeg_args(input_path, output_path, options):
-    """Argument list (without the `ffmpeg` executable itself)."""
+def names_file_name(raw_name):
+    """The names subtitle file, next to the raw on the PC. A bare file name
+    on purpose: ffmpeg runs in that folder, so the `ass` filter needs no
+    Windows path escaping (handles and our file names have no `:`/`,`)."""
+    stem = raw_name.rsplit(".", 1)[0] if "." in raw_name else raw_name
+    return stem + ".names.ass"
+
+
+def ffmpeg_args(input_path, output_path, options, names_file=None):
+    """Argument list (without the `ffmpeg` executable itself). With
+    `names_file`, the @ labels are drawn on the SOURCE frame, before the
+    scale/pad, so they stay on their panel across resolution changes."""
     o = normalize(**options)
     width, height = o["size"].split("x")
     value = _QUALITY_VALUE[o["encoder"]][o["quality"]]
@@ -56,7 +73,8 @@ def ffmpeg_args(input_path, output_path, options):
             "-rc", "vbr", "-cq", str(value), "-b:v", "0",
         ]  # fmt: skip
     video_filter = (
-        f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+        (f"ass={names_file}," if names_file else "")
+        + f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
         f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30,format=yuv420p"
     )
     return [
@@ -94,5 +112,6 @@ def command_text(raw_name, options, scope="file"):
             + " ".join(_quote(a) for a in args)
             + " }"
         )
-    args = ffmpeg_args(raw_name, output_name(raw_name), options)
+    names = names_file_name(raw_name) if normalize(**options)["names"] else None
+    args = ffmpeg_args(raw_name, output_name(raw_name), options, names_file=names)
     return "ffmpeg " + " ".join(_quote(a) for a in args)

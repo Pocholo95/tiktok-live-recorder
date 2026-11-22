@@ -10,9 +10,10 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from core import stream_stats
 from db import profiles_repo, recordings_repo
 from db.database import get_connection
-from supervisor import originals, storyboards
+from supervisor import names_overlay, originals, storyboards
 from supervisor.thumbnails import generate_thumbnail
 from utils.logger_manager import logger
+from web import convert
 from web.deps import get_db
 
 router = APIRouter()
@@ -448,6 +449,22 @@ def download_stream_stats(recording_id: int, db=Depends(get_db)):
     if not path.is_file():
         raise HTTPException(status_code=404, detail="No stats for this recording")
     return FileResponse(path, media_type="application/json", filename=path.name)
+
+
+@router.get("/recordings/{recording_id}/names.ass")
+def download_names_overlay(request: Request, recording_id: int):
+    """Each person's @ on their panel, as subtitles for the conversion
+    (supervisor/names_overlay.py). May scan an old raw the first time."""
+    recording = _lookup(request, recording_id)
+    if recording is None:
+        raise HTTPException(status_code=404, detail="Recording not found")
+    text, _labels = names_overlay.overlay_for(recording)
+    name = convert.names_file_name(Path(recording["file_path"]).name)
+    return Response(
+        text,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
 
 
 def participants_debug_path(recording_file_path):

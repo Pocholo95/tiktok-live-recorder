@@ -325,9 +325,26 @@ copies of the `*.example` files.
   only drops the names; it must never affect the recording. Time ranges
   go to `recording_participants` and are shown only in the web UI (the
   "Con quién estuvo" panel and the "En pantalla" bar under the player,
-  synced to playback). The user decided against burning names into the
-  MP4: TikTok's layout changes made fixed positions land on the video or
-  the black bars unpredictably, and per-panel placement isn't knowable.
+  synced to playback). Burning names into the MP4 was first declined
+  (fixed positions landed on the video or the black bars); once the SEI
+  gave each panel's box it became an OPTION (user request 2026-11-21):
+  "Poner los @" in the library's convert bar (localStorage
+  `convert-cmd-options.names`) -> script `-Names` -> `/api/convert/args?
+  names=1` returns `names.url` (`/recordings/{id}/names.ass`) and an
+  `ass={names}` filter placed BEFORE scale/pad (coordinates are fractions
+  of the source frame, so resolution changes don't move labels). The
+  script downloads it as `<stem>.names.ass` and runs ffmpeg inside its
+  work dir (bare file name: no Windows path escaping in the filter).
+  `supervisor/names_overlay.py` builds the ASS: host panel = recording's
+  creator, guests = cid -> name from `.participants.jsonl` "panels"
+  lines, no label without a known name, labels only with 2+ panels.
+  Positions come from `<recording>.layout.jsonl`, one line per layout
+  change ({"t", "grids": [{cid, host, box}]}, `[]` when the mix stops),
+  written live by `core/layout.LayoutTimeline` - the guests tracker only
+  keeps each panel's FIRST box, which was wrong once panels moved. Raws
+  recorded before that are scanned once (`scan_ts`, ~1.5 s for a 40-min
+  raw locally) and cached in the same file. Checked on recording 44 end
+  to end (script + local hub): every label on its panel through moves.
 - The user's TikTok `sessionid_ss` "expires" almost daily (2026-11-21;
   a secondary account used only by the hub, copied with the Cookie-Editor
   extension into Settings -> Cookies). Found the same day: each channel

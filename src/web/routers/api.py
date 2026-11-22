@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
 from db import recordings_repo
-from supervisor import storyboards
+from supervisor import names_overlay, storyboards
 from web import convert
 from web.deps import get_db
 from web.formatting import basename
@@ -57,6 +57,7 @@ def convert_args(
     size: str | None = None,
     quality: str | None = None,
     recording_id: int | None = None,
+    names: bool = False,
     db=Depends(get_db),
 ):
     """
@@ -65,13 +66,24 @@ def convert_args(
     `storyboard` also carries a second command that makes that recording's
     seek-bar thumbnails from the finished MP4 (`{output}`) into a
     `{storyboard}` folder; the script uploads them with `interval`.
+    With `names=1` and a recording that has someone to label, `names.url`
+    is the subtitle file to download next to the raw as `{names}` (a bare
+    file name: the script runs ffmpeg in that folder).
     """
-    options = convert.normalize(encoder, size, quality)
+    options = convert.normalize(encoder, size, quality, names)
     storyboard = None
+    names_info = None
     if recording_id is not None:
         row = recordings_repo.get(db, recording_id)
         if row is None:
             raise HTTPException(status_code=404, detail="Recording not found")
+        if options["names"]:
+            _text, labels = names_overlay.overlay_for(row)
+            if labels:
+                names_info = {
+                    "url": f"/recordings/{recording_id}/names.ass",
+                    "labels": labels,
+                }
         interval = storyboards.interval_for(row["duration_seconds"] or 3600)
         storyboard = {
             "interval": interval,
@@ -84,8 +96,11 @@ def convert_args(
         }
     return {
         "options": options,
-        "args": convert.ffmpeg_args("{input}", "{output}", options),
+        "args": convert.ffmpeg_args(
+            "{input}", "{output}", options, names_file="{names}" if names_info else None
+        ),
         "storyboard": storyboard,
+        "names": names_info,
     }
 
 
@@ -96,18 +111,26 @@ def convert_command(
     size: str | None = None,
     quality: str | None = None,
     scope: str = "file",
+    names: bool = False,
     db=Depends(get_db),
 ):
     row = recordings_repo.get(db, recording_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Recording not found")
-    options = convert.normalize(encoder, size, quality)
+    scope = "folder" if scope == "folder" else "file"
+    # Names are per recording: only the single-file command carries them.
+    options = convert.normalize(encoder, size, quality, names and scope == "file")
+    raw_name = basename(row["file_path"])
     return {
-        "command": convert.command_text(
-            basename(row["file_path"]),
-            options,
-            scope="folder" if scope == "folder" else "file",
-        )
+        "command": convert.command_text(raw_name, options, scope=scope),
+        "names": (
+            {
+                "url": f"/recordings/{recording_id}/names.ass",
+                "file_name": convert.names_file_name(raw_name),
+            }
+            if options["names"]
+            else None
+        ),
     }
 
 

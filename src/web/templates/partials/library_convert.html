@@ -37,6 +37,10 @@
             <button type="button" class="tab active" data-cmd-scope="file">Este archivo</button>
             <button type="button" class="tab" data-cmd-scope="folder">Toda la carpeta (PowerShell)</button>
           </div>
+          <p class="muted" id="names-download" hidden>
+            Con "Poner los @": bajá también <a class="btn btn-small" href="#">los nombres</a>
+            y dejalos en la misma carpeta como <span class="mono"></span>.
+          </p>
           <div class="code-block">
             <pre><code id="ffmpeg-cmd"></code></pre>
             <button type="button" class="btn btn-small code-copy" data-copy="#ffmpeg-cmd">Copiar</button>
@@ -75,6 +79,9 @@
   const rawName = root.dataset.rawName;
   const mp4Name = rawName.replace(/\.[^.]+$/, "") + ".mp4";
   const cmdEl = document.getElementById("ffmpeg-cmd");
+  const namesEl = document.getElementById("names-download");
+  const namesLink = namesEl.querySelector("a");
+  const namesFile = namesEl.querySelector(".mono");
   const SCOPE_KEY = "convert-cmd-scope";
 
   let scope = "file";
@@ -83,7 +90,7 @@
   // Same options as the batch bar (library.html), so every command agrees.
   function options() {
     const o = window.convertOptions ? window.convertOptions() : {};
-    return { encoder: o.encoder, size: o.size, quality: o.quality };
+    return { encoder: o.encoder, size: o.size, quality: o.quality, names: o.names ? "1" : "0" };
   }
 
   // The ffmpeg command is built server-side (web/convert.py), the same one
@@ -99,7 +106,16 @@
     const mine = ++requestId;
     fetch(`/api/convert/command?${params}`)
       .then((r) => r.json())
-      .then((data) => { if (mine === requestId) cmdEl.textContent = data.command; })
+      .then((data) => {
+        if (mine !== requestId) return;
+        cmdEl.textContent = data.command;
+        namesEl.hidden = !data.names;
+        if (data.names) {
+          namesLink.href = data.names.url;
+          namesLink.setAttribute("download", data.names.file_name);
+          namesFile.textContent = data.names.file_name;
+        }
+      })
       .catch(() => { if (mine === requestId) cmdEl.textContent = "No se pudo armar el comando."; });
   }
 

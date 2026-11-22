@@ -492,6 +492,9 @@ def _delete_recording_files(db, recording):
         Path(recording["file_path"]).with_suffix(".participants.jsonl").unlink(
             missing_ok=True
         )
+        Path(recording["file_path"]).with_suffix(".layout.jsonl").unlink(
+            missing_ok=True
+        )
         stream_stats.stats_path(recording["file_path"]).unlink(missing_ok=True)
         storyboards.remove(recording["file_path"])
     if recording["original_path"]:

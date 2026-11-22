@@ -389,7 +389,9 @@ class TikTokRecorder:
         if not self._track_participants:
             return None
         try:
-            layout = LayoutTracker()
+            layout = LayoutTracker(
+                timeline_path=str(Path(output).with_suffix(".layout.jsonl"))
+            )
             tracker = ParticipantTracker(
                 TikTokAPI(proxy=None, cookies=self._cookies),
                 room_id,

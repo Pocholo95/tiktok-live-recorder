@@ -25,6 +25,8 @@
   ... -Id 23
 .EXAMPLE
   ... -Encoder av1_nvenc
+.EXAMPLE
+  ... -Names   (puts each person's @ on their panel in the video)
 #>
 param(
     [string]$Hub = "__HUB_URL__",
@@ -37,6 +39,7 @@ param(
     [ValidateSet("high", "normal", "light")]
     [string]$Quality = "normal",
     [int]$Limit = 0,
+    [switch]$Names,
     [switch]$KeepFiles,
     [switch]$DryRun
 )
@@ -121,6 +124,7 @@ function Invoke-HubConvert {
             $tmp = Join-Path $WorkDir ($rec.output_name -replace "\.mp4$", ".converting.mp4")
             $sbDir = Join-Path $WorkDir ($rec.output_name -replace "\.mp4$", ".storyboard")
             $sbZip = "$sbDir.zip"
+            $namesFile = Join-Path $WorkDir ($rec.output_name -replace "\.mp4$", ".names.ass")
             Log ("[#{0}] @{1} {2}" -f $recId, $rec.username, $rec.file_name)
 
             if ($DryRun) { continue }
@@ -148,12 +152,34 @@ function Invoke-HubConvert {
                 # 2. Convert with the hub's exact arguments (asked per
                 # recording: the thumbnail spacing depends on its length).
                 Log "  convirtiendo..."
-                $convert = Invoke-RestMethod -Uri "$hubUrl/api/convert/args?encoder=$Encoder&size=$Size&quality=$Quality&recording_id=$recId"
+                $argsUrl = "$hubUrl/api/convert/args?encoder=$Encoder&size=$Size&quality=$Quality&recording_id=$recId"
+                $convert = Invoke-RestMethod -Uri ($argsUrl + $(if ($Names) { "&names=1" } else { "" }))
                 Remove-Item -Recurse -Force $sbDir, $sbZip -ErrorAction SilentlyContinue
-                $argsForThis = $convert.args | ForEach-Object {
-                    $_.Replace("{input}", $raw).Replace("{output}", $tmp)
+                Remove-Item -Force $namesFile -ErrorAction SilentlyContinue
+                if ($convert.names) {
+                    # The @ of each person on their panel: a subtitle file
+                    # next to the raw (ffmpeg runs in $WorkDir, see below).
+                    & curl.exe -f -sS -L --retry 3 -o $namesFile "$hubUrl$($convert.names.url)"
+                    if ($LASTEXITCODE -eq 0 -and (Test-Path $namesFile)) {
+                        Log ("  con los nombres ({0} etiquetas)" -f $convert.names.labels)
+                    }
+                    else {
+                        Log "  AVISO: no se pudieron bajar los nombres; se convierte sin ellos."
+                        $convert = Invoke-RestMethod -Uri $argsUrl
+                    }
                 }
-                & ffmpeg -y -loglevel error -stats @argsForThis
+                elseif ($Names) {
+                    Log "  sin nombres para poner (no hubo invitados identificados)."
+                }
+                $namesLeaf = Split-Path -Leaf $namesFile
+                $argsForThis = $convert.args | ForEach-Object {
+                    $_.Replace("{input}", $raw).Replace("{output}", $tmp).Replace("{names}", $namesLeaf)
+                }
+                # Run in the work folder: the names filter takes a bare file
+                # name (Windows paths need awkward escaping inside filters).
+                Push-Location $WorkDir
+                try { & ffmpeg -y -loglevel error -stats @argsForThis }
+                finally { Pop-Location }
                 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $tmp)) {
                     throw "ffmpeg fallo (codigo $LASTEXITCODE)"
                 }
@@ -215,6 +241,7 @@ function Invoke-HubConvert {
                     Remove-Item -Force $raw, $mp4 -ErrorAction SilentlyContinue
                 }
                 Remove-Item -Recurse -Force $sbDir, $sbZip -ErrorAction SilentlyContinue
+                Remove-Item -Force $namesFile -ErrorAction SilentlyContinue
                 $done++
                 Log "  listo."
             }
@@ -222,6 +249,7 @@ function Invoke-HubConvert {
                 $failed++
                 Remove-Item -Force $tmp -ErrorAction SilentlyContinue
                 Remove-Item -Recurse -Force $sbDir, $sbZip -ErrorAction SilentlyContinue
+                Remove-Item -Force $namesFile -ErrorAction SilentlyContinue
                 Log "  ERROR: $($_.Exception.Message) (los archivos locales quedan en $WorkDir)"
             }
         }

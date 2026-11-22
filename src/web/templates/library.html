@@ -37,19 +37,23 @@ document.addEventListener("click", (e) => {
   window.convertOptions = load;
   function render() {
     const o = load();
-    document.querySelectorAll("[data-convert-opt]").forEach((s) => { s.value = o[s.dataset.convertOpt]; });
+    document.querySelectorAll("[data-convert-opt]").forEach((s) => {
+      if (s.type === "checkbox") s.checked = !!o[s.dataset.convertOpt];
+      else s.value = o[s.dataset.convertOpt];
+    });
     const origin = location.origin;
     document.querySelectorAll("[data-convert-cmd]").forEach((el) => {
       const ids = el.dataset.ids ? ` -Id ${el.dataset.ids}` : "";
       el.textContent =
         `& ([scriptblock]::Create((irm "${origin}/tools/convert-pending.ps1?inline=1"))) ` +
-        `-Hub ${origin} -Encoder ${o.encoder} -Size ${o.size} -Quality ${o.quality}${ids}`;
+        `-Hub ${origin} -Encoder ${o.encoder} -Size ${o.size} -Quality ${o.quality}` +
+        `${o.names ? " -Names" : ""}${ids}`;
     });
   }
   document.addEventListener("change", (e) => {
     const s = e.target.closest("[data-convert-opt]");
     if (!s) return;
-    save({ ...load(), [s.dataset.convertOpt]: s.value });
+    save({ ...load(), [s.dataset.convertOpt]: s.type === "checkbox" ? s.checked : s.value });
     render();
     document.dispatchEvent(new CustomEvent("convert-options-changed"));
   });

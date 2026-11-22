@@ -48,24 +48,64 @@ def extract_app_data(data):
         return None
 
 
-def guest_panels(app_data):
-    """{cid: (x, y, w, h)} of every panel except the creator's own."""
+def all_grids(app_data):
+    """[{"cid", "host", "box": [x, y, w, h]}] of every panel, the creator's
+    own included (`host` true), sorted by cid. Boxes are fractions of the
+    video frame."""
     grids = app_data.get("grids") if isinstance(app_data, dict) else None
     if not isinstance(grids, list):
-        return {}
+        return []
     host = app_data.get("anchor_link_mic_id")
     host_cid = str(app_data.get("channel_id") or "")
-    panels = {}
+    result = []
     for grid in grids:
         if not isinstance(grid, dict) or not grid.get("cid"):
             continue
         cid = str(grid["cid"])
-        is_host = (host and grid.get("uid_str") == host) or (
-            not host and (cid == host_cid or grid.get("p") == 0)
+        is_host = bool(
+            (host and grid.get("uid_str") == host)
+            or (not host and (cid == host_cid or grid.get("p") == 0))
         )
-        if not is_host:
-            panels[cid] = tuple(grid.get(k) for k in ("x", "y", "w", "h"))
-    return panels
+        try:
+            box = [round(float(grid.get(k)), 4) for k in ("x", "y", "w", "h")]
+        except (TypeError, ValueError):
+            continue
+        result.append({"cid": cid, "host": is_host, "box": box})
+    return sorted(result, key=lambda g: g["cid"])
+
+
+def guest_panels(app_data):
+    """{cid: (x, y, w, h)} of every panel except the creator's own."""
+    return {g["cid"]: tuple(g["box"]) for g in all_grids(app_data) if not g["host"]}
+
+
+class LayoutTimeline:
+    """
+    Where every panel is, over the recording: appends a line to
+    `<recording>.layout.jsonl` each time the mix changes - {"t": video
+    seconds, "grids": all_grids(...)}, and "grids": [] once the mix stops
+    (solo again). Read by supervisor/names_overlay.py to put each person's
+    @ on their panel when converting. Panels move without anyone joining
+    or leaving (e.g. a guest made big), so it follows every change, not
+    only the first box. Best-effort: a write error only loses the file.
+    """
+
+    def __init__(self, path):
+        self._path = path
+        self._last = None
+        self._lock = threading.Lock()  # fed by the recording + tracker threads
+
+    def note(self, media_seconds, grids):
+        line = {"t": round(media_seconds, 2), "grids": grids}
+        with self._lock:
+            if grids == self._last:
+                return
+            self._last = grids
+            try:
+                with open(self._path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(line) + "\n")
+            except OSError:
+                pass
 
 
 class LayoutTracker:
@@ -77,7 +117,8 @@ class LayoutTracker:
     Each panel: {"cid", "start", "end" (None while on screen), "name"}.
     """
 
-    def __init__(self):
+    def __init__(self, timeline_path=None):
+        self._timeline = LayoutTimeline(timeline_path) if timeline_path else None
         self._lock = threading.Lock()
         self._panels = []  # every panel seen, in order of appearance
         self._open = {}  # cid -> open panel
@@ -102,7 +143,10 @@ class LayoutTracker:
         self.observe(media_ms / 1000, app_data)
 
     def observe(self, media_seconds, app_data):
-        panels = guest_panels(app_data)
+        grids = all_grids(app_data)
+        panels = {g["cid"]: tuple(g["box"]) for g in grids if not g["host"]}
+        if self._timeline is not None:
+            self._timeline.note(media_seconds, grids)
         with self._lock:
             self.seen_any = True
             self._last_seen = media_seconds
@@ -131,12 +175,19 @@ class LayoutTracker:
             ):
                 for cid in list(self._open):
                     self._close(cid, self._last_seen)
+                self._timeline_stop(self._last_seen)
 
     def finish(self, media_seconds):
         with self._lock:
             end = self._last_seen if self._last_seen is not None else media_seconds
             for cid in list(self._open):
                 self._close(cid, min(end, media_seconds))
+            self._timeline_stop(min(end, media_seconds))
+
+    def _timeline_stop(self, at):
+        # The mix description stopped: nobody is on a panel any more.
+        if self._timeline is not None:
+            self._timeline.note(at + 1, [])
 
     def _close(self, cid, at):
         panel = self._open.pop(cid)

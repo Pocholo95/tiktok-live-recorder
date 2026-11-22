@@ -1014,6 +1014,7 @@ button.guest-range:hover { color: var(--text); border-color: var(--accent); opac
 .convert-bar-title { font-size: 0.95rem; margin-right: 0.3rem; }
 .convert-bar select { flex: 0 1 auto; padding: 0.3rem 0.5rem; font-size: 0.82rem; }
 .convert-bar-cmd { flex-basis: 100%; font-size: 0.82rem; color: var(--muted); }
+.convert-bar-check { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; cursor: pointer; white-space: nowrap; }
 .convert-bar-cmd:not([open]) { flex-basis: auto; }
 .convert-bar-cmd summary { cursor: pointer; }
 .convert-bar-cmd[open] .code-block { margin-top: 0.4rem; }

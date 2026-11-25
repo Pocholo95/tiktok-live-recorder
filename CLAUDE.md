@@ -338,6 +338,8 @@ copies of the `*.example` files.
   `supervisor/names_overlay.py` builds the ASS: host panel = recording's
   creator, guests = cid -> name from `.participants.jsonl` "panels"
   lines, no label without a known name, labels only with 2+ panels.
+  Labels sit at each panel's bottom-right corner, like TikTok's own name
+  tags (user request 2026-11-25; first version was top-left).
   Positions come from `<recording>.layout.jsonl`, one line per layout
   change ({"t", "grids": [{cid, host, box}]}, `[]` when the mix stops),
   written live by `core/layout.LayoutTimeline` - the guests tracker only

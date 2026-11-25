@@ -62,10 +62,10 @@ def test_labels_follow_panels_when_they_move():
     )
     assert count == 6
     assert "PlayResX: 1000" in text and "PlayResY: 2000" in text
-    assert "0:00:10.00,0:00:20.00,Name,,0,0,0,,{\\pos(514,514)}@ana" in text
-    assert "0:00:20.00,0:00:30.00,Name,,0,0,0,,{\\pos(514,1014)}@ana" in text
-    assert "0:00:20.00,0:00:30.00,Name,,0,0,0,,{\\pos(514,514)}@beto" in text
-    assert "{\\pos(14,514)}@host" in text
+    assert "0:00:10.00,0:00:20.00,Name,,0,0,0,,{\\pos(986,986)}@ana" in text
+    assert "0:00:20.00,0:00:30.00,Name,,0,0,0,,{\\pos(986,1486)}@ana" in text
+    assert "0:00:20.00,0:00:30.00,Name,,0,0,0,,{\\pos(986,986)}@beto" in text
+    assert "{\\pos(486,1486)}@host" in text
 
 
 def test_no_label_without_a_name_or_while_solo():

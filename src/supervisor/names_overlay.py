@@ -158,10 +158,14 @@ def build_ass(timeline, names, host_name, width=720, height=1440):
             name = _SAFE_NAME.sub("", (name or "").lstrip("@"))
             if not name:
                 continue
-            x, y = grid["box"][0], grid["box"][1]
+            # Bottom-right corner of the panel, like TikTok's own name tags
+            # (user request 2026-11-25).
+            x, y, w, h = grid["box"]
+            right = round((x + w) * width - margin)
+            bottom = round((y + h) * height - margin)
             events.append(
                 f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Name,,0,0,0,,"
-                f"{{\\pos({round(x * width + margin)},{round(y * height + margin)})}}"
+                f"{{\\pos({right},{bottom})}}"
                 f"@{name}"
             )
     header = [
@@ -177,9 +181,9 @@ def build_ass(timeline, names, host_name, width=720, height=1440):
         "OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, "
         "ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, "
         "MarginL, MarginR, MarginV, Encoding",
-        # Bold white on a translucent black box, anchored top-left (7).
+        # Bold white on a translucent black box, anchored bottom-right (3).
         f"Style: Name,Arial,{font},&H00FFFFFF,&H00FFFFFF,&H70000000,&H70000000,"
-        f"1,0,0,0,100,100,0,0,3,{max(2, round(font * 0.2))},0,7,0,0,0,1",
+        f"1,0,0,0,100,100,0,0,3,{max(2, round(font * 0.2))},0,3,0,0,0,1",
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, "

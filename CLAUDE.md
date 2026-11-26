@@ -578,6 +578,14 @@ Observed on the user's hub (https://tiktok.pclo.net) with real data:
   user doesn't want it. Don't propose it again; the reconnect grace window
   prevents new splits instead.
 - Web UI login: hub is LAN-only (see idea 2 below).
+- Filler at a reconnect splice (found 2026-11-25 on recording 52 at
+  1:29:35, behind the library's "sin audio/video al grabar" warning):
+  right after a reconnect TikTok's FLV timestamps jumped ~2.8 s three or
+  four times in a row, each under `_MAX_FORWARD_MS` (5 s), so the video
+  got ~14 s frozen / ~8 s silent where only ~6 s of the live (SEI capture
+  time) were lost. The user is fine with it ("solo 14 s"); don't change
+  the splice thresholds for this alone (risk of A/V desync, see the A/V
+  timestamp jump item).
 - Scheduled/automatic conversion (nightly Task Scheduler): the user
   prefers running the one-line command when they want (2026-11-13).
 

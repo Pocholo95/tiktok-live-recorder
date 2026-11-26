@@ -8,6 +8,7 @@
   <div class="mark-actions">
     <button type="button" class="btn btn-ghost btn-small" onclick="previewRange({{ mark.start_seconds }}, {{ mark.end_seconds }})">▶ Ver</button>
     <a class="btn btn-ghost btn-small" href="/media/{{ recording_id or selected_recording.id }}/clip?start={{ mark.start_seconds }}&end={{ mark.end_seconds }}">Descargar</a>
+    {% include "partials/clip_telegram.html" %}
     <button
       class="btn btn-danger btn-small"
       hx-delete="/clip-marks/{{ mark.id }}"

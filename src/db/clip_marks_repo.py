@@ -23,6 +23,14 @@ def get(conn, clip_mark_id):
     ).fetchone()
 
 
+def mark_sent_to_telegram(conn, clip_mark_id):
+    conn.execute(
+        "UPDATE clip_marks SET telegram_sent_at = datetime('now') WHERE id = ?",
+        (clip_mark_id,),
+    )
+    conn.commit()
+
+
 def delete(conn, clip_mark_id):
     conn.execute("DELETE FROM clip_marks WHERE id = ?", (clip_mark_id,))
     conn.commit()

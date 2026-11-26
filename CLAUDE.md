@@ -377,6 +377,21 @@ copies of the `*.example` files.
   the legacy `use_telegram` column (name kept to avoid a migration); the
   worker reads it from the DB each time, and it is intentionally not a
   supervisor restart trigger.
+- Clips to Telegram (user request 2026-11-26: "solo para mandar los
+  clips"; chose a bot, a button per clip, one chat):
+  `notify/telegram_clips.py`. Settings "Clips por Telegram": bot token
+  (checked with getMe; `telegram_bot_token`, `telegram_bot_username` in
+  hub.db), "Buscar chats" lists the chats the bot saw via getUpdates and
+  "Usar este" saves `telegram_chat_id`/`telegram_chat_title`; test
+  message. Each saved clip gets a "Telegram" button (only when bot + chat
+  are set): `POST /clip-marks/{id}/telegram` cuts the MP4 with stream copy
+  + faststart into a temp dir under OUTPUT_DIR, sends it with sendVideo
+  (caption: label, @creator, range, live date in UTC), deletes it, and
+  stores `clip_marks.telegram_sent_at` ("✓ Telegram", asks before
+  resending). Bots can upload 50 MB at most (~5 min at the hub's
+  ~1.3 Mbps): bigger clips are refused with the size, never re-encoded.
+  Only converted (mp4) recordings. The old Telethon section in Settings is
+  the CLI's and untouched; live notices stay on Discord.
 - Problem alerts (`supervisor/alerts.py`, same Discord webhook, toggle
   `problem_alerts_enabled`, default on; each kind throttled via
   `settings` keys `alert_last:<kind>`):

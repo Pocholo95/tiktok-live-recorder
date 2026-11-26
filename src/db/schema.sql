@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS clip_marks (
     label TEXT,
     start_seconds REAL NOT NULL,
     end_seconds REAL NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    telegram_sent_at TEXT  -- last time it was sent to Telegram (notify/telegram_clips.py)
 );
 
 CREATE INDEX IF NOT EXISTS idx_clip_marks_recording ON clip_marks(recording_id);

@@ -12,6 +12,10 @@
 {% if saved == "discord" %}<p class="saved-banner">Webhook de Discord guardado. Probalo con "Enviar aviso de prueba".</p>{% endif %}
 {% if saved == "discord-cleared" %}<p class="saved-banner">Webhook de Discord quitado: no se van a mandar avisos.</p>{% endif %}
 {% if saved == "discord-test" %}<p class="saved-banner">Aviso de prueba enviado: revisá el canal de Discord.</p>{% endif %}
+{% if saved == "telegram-bot" %}<p class="saved-banner">Bot de Telegram guardado. Ahora elegí a qué chat manda los clips.</p>{% endif %}
+{% if saved == "telegram-chat" %}<p class="saved-banner">Chat de Telegram guardado. Probalo con "Mandar mensaje de prueba".</p>{% endif %}
+{% if saved == "telegram-test" %}<p class="saved-banner">Mensaje de prueba enviado: revisá Telegram.</p>{% endif %}
+{% if saved == "telegram-cleared" %}<p class="saved-banner">Bot de Telegram quitado: los clips ya no muestran el botón.</p>{% endif %}
 {% if error %}<p class="error-banner">{{ error }}</p>{% endif %}
 
 <p class="warning">
@@ -107,6 +111,60 @@
     {% endif %}
   </div>
 </form>
+
+<h2 id="telegram">Clips por Telegram</h2>
+<p class="hint settings-intro">
+  Cada clip guardado en la Biblioteca tiene un botón <strong>Telegram</strong> que lo
+  manda a un chat con este bot. En Telegram hablale a <strong>@BotFather</strong>,
+  mandale <span class="mono">/newbot</span> y pegá acá el token que te da. Un bot puede
+  mandar videos de hasta 50 MB: unos 5 minutos de clip.
+</p>
+<form method="post" action="/settings/telegram-bot" class="settings-form">
+  <label>
+    Token del bot
+    <span class="hint">{% if tg_token %}configurado{% if tg_bot %}: @{{ tg_bot }}{% endif %}{% else %}no configurado{% endif %}</span>
+    <input type="password" name="token" placeholder="123456789:AA…" autocomplete="off">
+  </label>
+  <div class="form-actions">
+    <button type="submit">Guardar bot</button>
+    {% if tg_token %}
+    <button type="submit" name="clear" value="1" class="button-danger">Quitar</button>
+    {% endif %}
+  </div>
+</form>
+{% if tg_token %}
+<div class="settings-form">
+  <p class="hint">
+    Chat: {% if tg_chat_id %}<strong>{{ tg_chat_title or tg_chat_id }}</strong>{% else %}todavía no elegiste ninguno{% endif %}.
+    Para elegirlo, mandale cualquier mensaje a {% if tg_bot %}<span class="mono">@{{ tg_bot }}</span>{% else %}tu bot{% endif %}
+    (o agregalo a un grupo o canal y escribí algo ahí) y tocá <strong>Buscar chats</strong>.
+  </p>
+  <div class="form-actions">
+    <form method="post" action="/settings/telegram-bot/find-chats"><button type="submit" class="btn-secondary">Buscar chats</button></form>
+    {% if tg_chat_id %}
+    <form method="post" action="/settings/telegram-bot/test"><button type="submit" class="btn-secondary">Mandar mensaje de prueba</button></form>
+    {% endif %}
+  </div>
+  {% if tg_chats is defined %}
+    {% if tg_chats %}
+    <ul class="tg-chats">
+      {% for chat in tg_chats %}
+      <li>
+        <form method="post" action="/settings/telegram-bot/chat">
+          <input type="hidden" name="chat_id" value="{{ chat.id }}">
+          <input type="hidden" name="chat_title" value="{{ chat.title }}">
+          <span>{{ chat.title }} <span class="muted">({{ {"private": "chat privado", "group": "grupo", "supergroup": "grupo", "channel": "canal"}.get(chat.type, chat.type) }})</span></span>
+          <button type="submit" class="btn-small">Usar este</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint">El bot no recibió mensajes todavía. Mandale uno y volvé a buscar.</p>
+    {% endif %}
+  {% endif %}
+</div>
+{% endif %}
 
 <h2>Avisos de problemas</h2>
 <p class="hint settings-intro">

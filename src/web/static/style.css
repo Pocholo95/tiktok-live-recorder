@@ -1156,3 +1156,14 @@ button.guest-range:hover { color: var(--text); border-color: var(--accent); opac
 .guest-unknown { color: var(--muted); font-style: italic; }
 .on-screen-chip.is-unknown { color: var(--muted); font-style: italic; cursor: default; }
 .on-screen-chip.is-unknown:hover { border-color: var(--border); }
+
+/* Clip -> Telegram button (partials/clip_telegram.html) */
+.clip-telegram { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; }
+.clip-telegram .when-busy { display: none; }
+.clip-telegram button.htmx-request .when-idle,
+.clip-telegram button[disabled] .when-idle { display: none; }
+.clip-telegram button.htmx-request .when-busy,
+.clip-telegram button[disabled] .when-busy { display: inline; }
+.clip-telegram-error { flex-basis: 100%; font-size: 0.8rem; color: var(--error); }
+.tg-chats { list-style: none; padding: 0; margin: 0.6rem 0 0; display: grid; gap: 0.4rem; }
+.tg-chats form { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; }

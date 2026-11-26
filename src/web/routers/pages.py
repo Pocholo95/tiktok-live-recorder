@@ -25,6 +25,7 @@ from core import stream_stats
 from supervisor import originals, storyboards
 from web import convert as convert_presets
 from utils.enums import Mode
+from utils.logger_manager import logger
 from web.deps import get_db, get_supervisor, get_templates
 
 router = APIRouter()
@@ -444,6 +445,7 @@ def library(
             "groups": groups,
             "selected_recording": selected_recording,
             "marks": marks,
+            "telegram_ready": _telegram_ready(db),
             "participants": participants,
             "guest_groups": _group_guests(participants),
             "selected_channel_id": channel_id,
@@ -579,7 +581,66 @@ def create_clip_mark(
     return templates.TemplateResponse(
         request,
         "partials/clip_marks.html",
-        {"recording_id": recording_id, "marks": marks, "error": error},
+        {
+            "recording_id": recording_id,
+            "marks": marks,
+            "error": error,
+            "telegram_ready": _telegram_ready(db),
+        },
+    )
+
+
+def _telegram_ready(conn):
+    """Both the bot and its chat are configured: clips can be sent."""
+    from notify import telegram_clips
+
+    return bool(
+        settings_repo.get(conn, telegram_clips.TOKEN_KEY)
+        and settings_repo.get(conn, telegram_clips.CHAT_KEY)
+    )
+
+
+@router.post("/clip-marks/{mark_id}/telegram", response_class=HTMLResponse)
+def send_clip_to_telegram(
+    request: Request, mark_id: int, templates=Depends(get_templates)
+):
+    """Cuts the saved clip and sends it to the Telegram chat (can take a
+    while: the button shows "Enviando" meanwhile). Returns the button's
+    replacement: sent, or the reason it failed."""
+    from notify import telegram_clips
+
+    conn = get_connection(request.app.state.db_path)
+    try:
+        mark = clip_marks_repo.get(conn, mark_id)
+        recording = recordings_repo.get(conn, mark["recording_id"]) if mark else None
+        token = settings_repo.get(conn, telegram_clips.TOKEN_KEY)
+        chat_id = settings_repo.get(conn, telegram_clips.CHAT_KEY)
+    finally:
+        conn.close()  # the upload can take minutes: don't hold the DB
+    if mark is None or recording is None:
+        raise HTTPException(status_code=404, detail="Clip not found")
+
+    error = None
+    try:
+        telegram_clips.send_clip(
+            token, chat_id, recording, mark, work_dir=request.app.state.output_dir
+        )
+    except telegram_clips.TelegramError as e:
+        error = str(e)
+    except Exception as e:  # ffmpeg missing, disk full...
+        logger.warning(f"Sending clip {mark_id} to Telegram failed: {e}")
+        error = f"No se pudo mandar: {e}"
+    if error is None:
+        conn = get_connection(request.app.state.db_path)
+        try:
+            clip_marks_repo.mark_sent_to_telegram(conn, mark_id)
+            mark = clip_marks_repo.get(conn, mark_id)
+        finally:
+            conn.close()
+    return templates.TemplateResponse(
+        request,
+        "partials/clip_telegram.html",
+        {"mark": mark, "error": error, "telegram_ready": True},
     )
 
 
@@ -627,7 +688,11 @@ def settings_page(
     return templates.TemplateResponse(
         request,
         "settings.html",
-        {**_settings_context(saved), **_discord_context(request)},
+        {
+            **_settings_context(saved),
+            **_discord_context(request),
+            **_telegram_context(request),
+        },
     )
 
 
@@ -635,7 +700,122 @@ def _settings_error(request, templates, message):
     return templates.TemplateResponse(
         request,
         "settings.html",
-        {**_settings_context(), **_discord_context(request), "error": message},
+        {
+            **_settings_context(),
+            **_discord_context(request),
+            **_telegram_context(request),
+            "error": message,
+        },
+    )
+
+
+def _telegram_context(request):
+    from notify import telegram_clips
+
+    conn = get_connection(request.app.state.db_path)
+    try:
+        return {
+            "tg_token": bool(settings_repo.get(conn, telegram_clips.TOKEN_KEY)),
+            "tg_bot": settings_repo.get(conn, telegram_clips.BOT_NAME_KEY),
+            "tg_chat_id": settings_repo.get(conn, telegram_clips.CHAT_KEY),
+            "tg_chat_title": settings_repo.get(conn, telegram_clips.CHAT_TITLE_KEY),
+        }
+    finally:
+        conn.close()
+
+
+@router.post("/settings/telegram-bot", response_class=HTMLResponse)
+def update_telegram_bot(
+    request: Request,
+    token: str = Form(""),
+    clear: str = Form(""),
+    db=Depends(get_db),
+    templates=Depends(get_templates),
+):
+    from notify import telegram_clips
+
+    keys = (
+        telegram_clips.TOKEN_KEY,
+        telegram_clips.BOT_NAME_KEY,
+        telegram_clips.CHAT_KEY,
+        telegram_clips.CHAT_TITLE_KEY,
+    )
+    if clear:
+        for key in keys:
+            settings_repo.set(db, key, None)
+        return RedirectResponse(
+            url="/settings?saved=telegram-cleared#telegram", status_code=303
+        )
+    token = token.strip()
+    if not token:
+        return RedirectResponse(url="/settings#telegram", status_code=303)
+    try:
+        username = telegram_clips.bot_username(token)
+    except telegram_clips.TelegramError as e:
+        return _settings_error(request, templates, f"No se guardó el bot: {e}")
+    if settings_repo.get(db, telegram_clips.TOKEN_KEY) != token:
+        # Another bot: its chats are others, pick again.
+        settings_repo.set(db, telegram_clips.CHAT_KEY, None)
+        settings_repo.set(db, telegram_clips.CHAT_TITLE_KEY, None)
+    settings_repo.set(db, telegram_clips.TOKEN_KEY, token)
+    settings_repo.set(db, telegram_clips.BOT_NAME_KEY, username)
+    return RedirectResponse(
+        url="/settings?saved=telegram-bot#telegram", status_code=303
+    )
+
+
+@router.post("/settings/telegram-bot/find-chats", response_class=HTMLResponse)
+def find_telegram_chats(
+    request: Request, db=Depends(get_db), templates=Depends(get_templates)
+):
+    from notify import telegram_clips
+
+    try:
+        chats = telegram_clips.find_chats(
+            settings_repo.get(db, telegram_clips.TOKEN_KEY)
+        )
+    except telegram_clips.TelegramError as e:
+        return _settings_error(request, templates, str(e))
+    return templates.TemplateResponse(
+        request,
+        "settings.html",
+        {
+            **_settings_context(),
+            **_discord_context(request),
+            **_telegram_context(request),
+            "tg_chats": chats,
+        },
+    )
+
+
+@router.post("/settings/telegram-bot/chat", response_class=HTMLResponse)
+def choose_telegram_chat(
+    chat_id: str = Form(""), chat_title: str = Form(""), db=Depends(get_db)
+):
+    from notify import telegram_clips
+
+    settings_repo.set(db, telegram_clips.CHAT_KEY, chat_id.strip() or None)
+    settings_repo.set(db, telegram_clips.CHAT_TITLE_KEY, chat_title.strip() or None)
+    return RedirectResponse(
+        url="/settings?saved=telegram-chat#telegram", status_code=303
+    )
+
+
+@router.post("/settings/telegram-bot/test", response_class=HTMLResponse)
+def test_telegram_bot(
+    request: Request, db=Depends(get_db), templates=Depends(get_templates)
+):
+    from notify import telegram_clips
+
+    try:
+        telegram_clips.send_test(
+            settings_repo.get(db, telegram_clips.TOKEN_KEY),
+            settings_repo.get(db, telegram_clips.CHAT_KEY),
+        )
+    except telegram_clips.TelegramError as e:
+        return _settings_error(request, templates, str(e))
+    return RedirectResponse(
+        url="/settings?saved=telegram-test#telegram", status_code=303
     )
 
 

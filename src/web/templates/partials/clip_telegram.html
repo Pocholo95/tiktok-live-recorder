@@ -1,0 +1,20 @@
+{# "Mandar a Telegram" for one saved clip (notify/telegram_clips.py). The
+   POST can take a while (cut + upload), so the button turns into "Enviando"
+   and is disabled until the answer replaces this whole span. #}
+{% if telegram_ready %}
+<span class="clip-telegram" id="clip-telegram-{{ mark.id }}">
+  <button
+    type="button"
+    class="btn btn-ghost btn-small"
+    hx-post="/clip-marks/{{ mark.id }}/telegram"
+    hx-target="#clip-telegram-{{ mark.id }}"
+    hx-swap="outerHTML"
+    hx-disabled-elt="this"
+    {% if mark.telegram_sent_at %}hx-confirm="Este clip ya se mandó a Telegram. ¿Mandarlo de nuevo?"{% endif %}
+    title="{% if mark.telegram_sent_at %}Enviado {{ mark.telegram_sent_at }} UTC{% else %}Mandar este clip al chat de Telegram{% endif %}">
+    <span class="when-idle">{% if mark.telegram_sent_at %}✓ Telegram{% else %}Telegram{% endif %}</span>
+    <span class="when-busy">Enviando…</span>
+  </button>
+  {% if error %}<span class="clip-telegram-error" role="alert">{{ error }}</span>{% endif %}
+</span>
+{% endif %}

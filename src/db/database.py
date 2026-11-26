@@ -36,6 +36,7 @@ def init_db(db_path):
 _ADDED_COLUMNS = {
     "channels": [("smart_interval", "INTEGER NOT NULL DEFAULT 0")],
     "recordings": [("original_path", "TEXT"), ("original_kept_at", "TEXT")],
+    "clip_marks": [("telegram_sent_at", "TEXT")],
 }
 
 
